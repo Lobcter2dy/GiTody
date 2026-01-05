@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, session } = require('electron');
+const { app, BrowserWindow, ipcMain, session, systemPreferences } = require('electron');
 const path = require('path');
 const si = require('systeminformation');
 const http = require('http');
@@ -9,8 +9,17 @@ const { URL } = require('url');
 // Отключить sandbox для Linux
 app.commandLine.appendSwitch('no-sandbox');
 
+// === Флаги для микрофона и Web Speech API ===
+app.commandLine.appendSwitch('enable-speech-dispatcher');
+app.commandLine.appendSwitch('enable-media-stream');
+app.commandLine.appendSwitch('use-fake-ui-for-media-stream');
+app.commandLine.appendSwitch('enable-usermedia-screen-capturing');
+app.commandLine.appendSwitch('allow-http-screen-capture');
+app.commandLine.appendSwitch('auto-accept-camera-and-microphone-capture');
+app.commandLine.appendSwitch('enable-features', 'WebSpeechAPI,MediaCapabilities');
+app.commandLine.appendSwitch('disable-features', 'OutOfBlinkCors,MediaSessionService');
+
 // Эмулировать обычный Chrome для Web Speech API
-app.commandLine.appendSwitch('disable-features', 'OutOfBlinkCors');
 app.userAgentFallback = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 let mainWindow;
@@ -66,12 +75,33 @@ function startLocalServer() {
     });
 }
 
+// Запросить доступ к микрофону на macOS
+async function requestMicrophoneAccess() {
+    if (process.platform === 'darwin') {
+        try {
+            const status = systemPreferences.getMediaAccessStatus('microphone');
+            console.log('[Microphone] macOS status:', status);
+            
+            if (status !== 'granted') {
+                const granted = await systemPreferences.askForMediaAccess('microphone');
+                console.log('[Microphone] macOS access granted:', granted);
+                return granted;
+            }
+            return true;
+        } catch (e) {
+            console.error('[Microphone] macOS error:', e);
+            return false;
+        }
+    }
+    return true;
+}
+
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1400,
         height: 900,
-        frame: false,           // Без системной рамки
-        titleBarStyle: 'hidden', // Скрыть заголовок
+        frame: false,
+        titleBarStyle: 'hidden',
         transparent: false,
         webPreferences: {
             nodeIntegration: false,
@@ -79,8 +109,10 @@ function createWindow() {
             preload: path.join(__dirname, 'preload.cjs'),
             webSecurity: false,
             allowRunningInsecureContent: true,
-            // Использовать отдельную сессию для обхода ограничений
             partition: 'persist:speech',
+            // === Важные настройки для микрофона ===
+            experimentalFeatures: true,
+            backgroundThrottling: false,
         },
         icon: path.join(__dirname, '../public/icon.png'),
         minWidth: 800,
@@ -90,25 +122,73 @@ function createWindow() {
     // Получить сессию для нашего partition
     const ses = session.fromPartition('persist:speech');
     
-    // Автоматически разрешить ВСЕ разрешения
-    ses.setPermissionRequestHandler((webContents, permission, callback) => {
-        console.log('[Permission] Request:', permission);
-        callback(true);
+    // === Разрешить ВСЕ разрешения включая микрофон ===
+    ses.setPermissionRequestHandler((webContents, permission, callback, details) => {
+        console.log('[Permission] Request:', permission, details?.mediaTypes || '');
+        
+        // Разрешить все разрешения
+        const allowedPermissions = [
+            'media',
+            'mediaKeySystem',
+            'geolocation',
+            'notifications',
+            'midi',
+            'midiSysex',
+            'pointerLock',
+            'fullscreen',
+            'openExternal',
+            'clipboard-read',
+            'clipboard-write',
+            'clipboard-sanitized-write',
+            'display-capture',
+            'hid',
+            'serial',
+            'usb',
+            'window-placement',
+            'background-sync',
+            'sensors',
+            'accessibility-events',
+            'persistent-storage',
+            'payment-handler'
+        ];
+        
+        if (allowedPermissions.includes(permission) || permission.includes('audio') || permission.includes('video')) {
+            console.log('[Permission] Granted:', permission);
+            callback(true);
+        } else {
+            console.log('[Permission] Granted (default):', permission);
+            callback(true);
+        }
     });
     
-    ses.setPermissionCheckHandler((webContents, permission, requestingOrigin) => {
-        console.log('[Permission] Check:', permission, requestingOrigin);
+    ses.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
+        console.log('[Permission] Check:', permission, 'from', requestingOrigin);
         return true;
     });
     
+    // === Разрешить все медиа-устройства ===
     ses.setDevicePermissionHandler((details) => {
-        console.log('[Permission] Device:', details.deviceType);
+        console.log('[Permission] Device:', details.deviceType, details.device?.deviceId || '');
         return true;
+    });
+    
+    // === Обработчик выбора медиа-устройства (микрофон) ===
+    mainWindow.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
+        console.log('[Media] Display media request');
+        // Разрешить захват экрана
+        const { desktopCapturer } = require('electron');
+        desktopCapturer.getSources({ types: ['window', 'screen'] }).then((sources) => {
+            if (sources.length > 0) {
+                callback({ video: sources[0] });
+            } else {
+                callback({});
+            }
+        });
     });
     
     // Отключить проверку сертификатов для Google
     ses.setCertificateVerifyProc((request, callback) => {
-        callback(0); // Принять все сертификаты
+        callback(0);
     });
 
     // Загрузить через HTTP (требуется для Web Speech API)
@@ -116,6 +196,14 @@ function createWindow() {
 
     mainWindow.on('closed', () => {
         mainWindow = null;
+    });
+    
+    // === Обработать запрос медиа-устройств ===
+    mainWindow.webContents.on('select-bluetooth-device', (event, deviceList, callback) => {
+        event.preventDefault();
+        if (deviceList && deviceList.length > 0) {
+            callback(deviceList[0].deviceId);
+        }
     });
 }
 
@@ -136,6 +224,55 @@ ipcMain.on('window-maximize', () => {
 
 ipcMain.on('window-close', () => {
     if (mainWindow) mainWindow.close();
+});
+
+// === IPC для микрофона ===
+
+ipcMain.handle('check-microphone-permission', async () => {
+    try {
+        if (process.platform === 'darwin') {
+            const status = systemPreferences.getMediaAccessStatus('microphone');
+            return { status, granted: status === 'granted' };
+        } else if (process.platform === 'win32') {
+            // Windows - проверка через systemPreferences
+            try {
+                const status = systemPreferences.getMediaAccessStatus('microphone');
+                return { status, granted: status === 'granted' || status === 'unknown' };
+            } catch {
+                return { status: 'unknown', granted: true };
+            }
+        } else {
+            // Linux - всегда разрешено (обрабатывается системой)
+            return { status: 'granted', granted: true };
+        }
+    } catch (e) {
+        console.error('[Microphone] Permission check error:', e);
+        return { status: 'error', granted: false, error: e.message };
+    }
+});
+
+ipcMain.handle('request-microphone-permission', async () => {
+    try {
+        if (process.platform === 'darwin') {
+            const granted = await systemPreferences.askForMediaAccess('microphone');
+            return { granted };
+        } else {
+            // Windows/Linux - разрешение через браузер
+            return { granted: true };
+        }
+    } catch (e) {
+        console.error('[Microphone] Permission request error:', e);
+        return { granted: false, error: e.message };
+    }
+});
+
+ipcMain.handle('get-media-devices', async () => {
+    try {
+        // Это будет вызвано из renderer через navigator.mediaDevices
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
 });
 
 // === System Monitoring IPC ===
@@ -386,7 +523,7 @@ ipcMain.handle('check-driver-updates', async () => {
         // Проверить GPU драйверы
         if (gpu && gpu.controllers && gpu.controllers.length > 0) {
             for (const ctrl of gpu.controllers) {
-                const lastUpdate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // 30 дней назад
+                const lastUpdate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
                 updates.push({
                     id: `gpu-${ctrl.vendor}`,
                     name: ctrl.vendor || 'GPU Driver',
@@ -491,7 +628,6 @@ ipcMain.handle('get-disk-list', async () => {
         
         const diskList = [];
         
-        // Получить информацию о дисках
         for (const disk of disks) {
             const diskInfo = {
                 id: disk.name || `disk-${disk.device}`,
@@ -506,7 +642,6 @@ ipcMain.handle('get-disk-list', async () => {
                 status: 'OK'
             };
             
-            // Добавить информацию о использовании из fsSize
             let used = 0;
             let total = 0;
             for (const fs of fsSize) {
@@ -561,7 +696,6 @@ ipcMain.handle('get-removable-devices', async () => {
         
         const removable = [];
         
-        // Съемные диски из diskLayout
         for (const disk of disks) {
             if (disk.removable) {
                 removable.push({
@@ -575,7 +709,6 @@ ipcMain.handle('get-removable-devices', async () => {
             }
         }
         
-        // USB устройства
         for (const u of usb.slice(0, 5)) {
             removable.push({
                 id: `usb-${u.name}`,
@@ -598,7 +731,6 @@ ipcMain.handle('get-removable-devices', async () => {
 ipcMain.handle('format-disk', async (event, diskId) => {
     try {
         console.log('[IPC] Format disk:', diskId);
-        // Имитация форматирования
         return {
             success: true,
             message: `Диск ${diskId} успешно отформатирован`
@@ -646,7 +778,6 @@ ipcMain.handle('eject-disk', async (event, diskId) => {
 
 // === GitHub OAuth ===
 
-// Запустить OAuth callback сервер
 function startOAuthCallbackServer() {
     oauthCallbackServer = http.createServer((req, res) => {
         const url = new URL(req.url, 'http://localhost:47524');
@@ -695,18 +826,9 @@ function startOAuthCallbackServer() {
     });
 }
 
-// Обменять код на токен
 ipcMain.handle('github-oauth-exchange', async (event, code) => {
     try {
         console.log('[OAuth] Exchanging code for token...');
-        
-        // Для публичного OAuth приложения можно использовать client_id без secret
-        // Но лучше использовать токен напрямую через Personal Access Token
-        // Здесь делаем упрощённую версию - возвращаем код для обмена на фронтенде
-        
-        // В реальности нужно обменивать через backend или использовать PAT
-        // Для демо возвращаем код, который фронтенд обменяет
-        
         return { code, needsExchange: true };
     } catch (e) {
         console.error('[OAuth] Exchange error:', e);
@@ -714,7 +836,10 @@ ipcMain.handle('github-oauth-exchange', async (event, code) => {
     }
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+    // Запросить доступ к микрофону перед созданием окна
+    await requestMicrophoneAccess();
+    
     startLocalServer();
     startOAuthCallbackServer();
     createWindow();
