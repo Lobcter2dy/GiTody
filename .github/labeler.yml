@@ -1,19 +1,29 @@
 'type: documentation':
-  - '**/*.md'
-  - 'docs/**/*'
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/*.md'
+          - 'docs/**/*'
 
 'dependencies':
-  - 'package.json'
-  - 'package-lock.json'
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'package.json'
+          - 'package-lock.json'
 
 'platform: electron':
-  - 'electron/**/*'
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'electron/**/*'
 
 'frontend':
-  - 'src/**/*.html'
-  - 'src/**/*.css'
-  - 'src/**/*.js'
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/**/*.html'
+          - 'src/**/*.css'
+          - 'src/**/*.js'
 
 'build':
-  - 'vite.config.js'
-  - '.github/workflows/**'
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'vite.config.js'
+          - '.github/workflows/**'
