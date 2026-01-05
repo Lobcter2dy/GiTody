@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, session } = require('electron');
+const { app, BrowserWindow, ipcMain, session, shell } = require('electron');
 const path = require('path');
 const si = require('systeminformation');
 const http = require('http');
@@ -23,8 +23,6 @@ function startLocalServer() {
     
     localServer = http.createServer((req, res) => {
         let filePath = path.join(distPath, req.url === '/' ? 'index.html' : req.url);
-        
-        // Убрать query string
         filePath = filePath.split('?')[0];
         
         const ext = path.extname(filePath);
@@ -45,7 +43,6 @@ function startLocalServer() {
         fs.readFile(filePath, (err, content) => {
             if (err) {
                 if (err.code === 'ENOENT') {
-                    // Если файл не найден, вернуть index.html (для SPA)
                     fs.readFile(path.join(distPath, 'index.html'), (e, c) => {
                         res.writeHead(200, { 'Content-Type': 'text/html' });
                         res.end(c, 'utf-8');
@@ -70,16 +67,14 @@ function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1400,
         height: 900,
-        frame: false,           // Без системной рамки
-        titleBarStyle: 'hidden', // Скрыть заголовок
-        transparent: false,
+        frame: false,
+        titleBarStyle: 'hidden',
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
             preload: path.join(__dirname, 'preload.cjs'),
             webSecurity: false,
             allowRunningInsecureContent: true,
-            // Использовать отдельную сессию для обхода ограничений
             partition: 'persist:speech',
         },
         icon: path.join(__dirname, '../public/icon.png'),
@@ -87,31 +82,12 @@ function createWindow() {
         minHeight: 600,
     });
 
-    // Получить сессию для нашего partition
     const ses = session.fromPartition('persist:speech');
-    
-    // Автоматически разрешить ВСЕ разрешения
-    ses.setPermissionRequestHandler((webContents, permission, callback) => {
-        console.log('[Permission] Request:', permission);
-        callback(true);
-    });
-    
-    ses.setPermissionCheckHandler((webContents, permission, requestingOrigin) => {
-        console.log('[Permission] Check:', permission, requestingOrigin);
-        return true;
-    });
-    
-    ses.setDevicePermissionHandler((details) => {
-        console.log('[Permission] Device:', details.deviceType);
-        return true;
-    });
-    
-    // Отключить проверку сертификатов для Google
-    ses.setCertificateVerifyProc((request, callback) => {
-        callback(0); // Принять все сертификаты
-    });
+    ses.setPermissionRequestHandler((webContents, permission, callback) => callback(true));
+    ses.setPermissionCheckHandler(() => true);
+    ses.setDevicePermissionHandler(() => true);
+    ses.setCertificateVerifyProc((request, callback) => callback(0));
 
-    // Загрузить через HTTP (требуется для Web Speech API)
     mainWindow.loadURL('http://127.0.0.1:47523');
 
     mainWindow.on('closed', () => {
@@ -119,615 +95,83 @@ function createWindow() {
     });
 }
 
-// IPC для управления окном
-ipcMain.on('window-minimize', () => {
-    if (mainWindow) mainWindow.minimize();
-});
-
+// IPC Handlers
+ipcMain.on('window-minimize', () => mainWindow?.minimize());
 ipcMain.on('window-maximize', () => {
-    if (mainWindow) {
-        if (mainWindow.isMaximized()) {
-            mainWindow.unmaximize();
-        } else {
-            mainWindow.maximize();
-        }
-    }
+    if (mainWindow?.isMaximized()) mainWindow.unmaximize();
+    else mainWindow?.maximize();
 });
+ipcMain.on('window-close', () => mainWindow?.close());
 
-ipcMain.on('window-close', () => {
-    if (mainWindow) mainWindow.close();
-});
-
-// === System Monitoring IPC ===
-
+// System Monitoring
 ipcMain.handle('get-cpu-info', async () => {
-    try {
-        const cpuData = await si.currentLoad();
-        const cpuInfo = await si.cpu();
-        const temp = await si.cpuTemperature();
-        
-        const result = {
-            load: parseFloat(cpuData.currentLoad).toFixed(1),
-            cores: cpuInfo.cores || cpuData.cores,
-            temp: parseFloat(temp.main || 0).toFixed(1)
-        };
-        
-        console.log('[IPC] CPU Info:', result);
-        return result;
-    } catch (e) {
-        console.error('[CPU] Error:', e.message);
-        return { load: '0', cores: 0, temp: '0' };
-    }
+    const cpuData = await si.currentLoad();
+    const cpuInfo = await si.cpu();
+    const temp = await si.cpuTemperature();
+    return { load: parseFloat(cpuData.currentLoad).toFixed(1), cores: cpuInfo.cores, temp: parseFloat(temp.main || 0).toFixed(1) };
 });
 
 ipcMain.handle('get-memory-info', async () => {
-    try {
-        const mem = await si.mem();
-        const result = {
-            used: (mem.used / 1024 / 1024 / 1024).toFixed(2),
-            total: (mem.total / 1024 / 1024 / 1024).toFixed(2),
-            percent: ((mem.used / mem.total) * 100).toFixed(1)
-        };
-        console.log('[IPC] Memory Info:', result);
-        return result;
-    } catch (e) {
-        console.error('[Memory] Error:', e.message);
-        return { used: '0', total: '0', percent: '0' };
-    }
+    const mem = await si.mem();
+    return { used: (mem.used / 1024**3).toFixed(2), total: (mem.total / 1024**3).toFixed(2), percent: ((mem.used / mem.total) * 100).toFixed(1) };
 });
 
 ipcMain.handle('get-disk-info', async () => {
-    try {
-        const disks = await si.diskLayout();
-        const fsSize = await si.fsSize();
-        
-        let usedSize = 0;
-        let totalFs = 0;
-        for (const fs of fsSize) {
-            usedSize += fs.used;
-            totalFs += fs.size;
-        }
-        
-        const result = {
-            disks: disks.length,
-            total: (totalFs / 1024 / 1024 / 1024).toFixed(2),
-            used: (usedSize / 1024 / 1024 / 1024).toFixed(2),
-            percent: totalFs > 0 ? ((usedSize / totalFs) * 100).toFixed(1) : '0'
-        };
-        console.log('[IPC] Disk Info:', result);
-        return result;
-    } catch (e) {
-        console.error('[Disk] Error:', e.message);
-        return { disks: 0, total: '0', used: '0', percent: '0' };
-    }
+    const fsSize = await si.fsSize();
+    let used = 0, total = 0;
+    fsSize.forEach(f => { used += f.used; total += f.size; });
+    return { disks: fsSize.length, total: (total / 1024**3).toFixed(2), used: (used / 1024**3).toFixed(2), percent: ((used / total) * 100).toFixed(1) };
 });
 
-ipcMain.handle('get-gpu-info', async () => {
-    try {
-        const gpu = await si.graphics();
-        if (gpu.controllers && gpu.controllers.length > 0) {
-            const ctrl = gpu.controllers[0];
-            return {
-                brand: ctrl.vendor || 'Unknown',
-                model: ctrl.model || 'Unknown',
-                vram: ctrl.vram || 0
-            };
-        }
-        return { brand: 'N/A', model: 'N/A', vram: 0 };
-    } catch (e) {
-        console.error('[GPU] Error:', e);
-        return { brand: 'N/A', model: 'N/A', vram: 0 };
-    }
-});
-
-ipcMain.handle('get-os-info', async () => {
-    try {
-        const os = await si.osInfo();
-        const uptime = await si.time();
-        return {
-            platform: os.platform,
-            distro: os.distro,
-            arch: os.arch,
-            kernel: os.kernel,
-            uptime: uptime.uptime
-        };
-    } catch (e) {
-        console.error('[OS] Error:', e);
-        return { platform: 'Unknown', distro: 'Unknown', arch: 'Unknown', kernel: 'Unknown', uptime: 0 };
-    }
-});
-
-ipcMain.handle('get-processes', async () => {
-    try {
-        const processes = await si.processes();
-        const topProcesses = processes.list
-            .sort((a, b) => (b.mem || 0) - (a.mem || 0))
-            .slice(0, 10);
-        return topProcesses.map(p => ({
-            name: p.name,
-            pid: p.pid,
-            mem: ((p.mem || 0) / 1024).toFixed(2),
-            cpu: (p.pcpu || 0).toFixed(1)
-        }));
-    } catch (e) {
-        console.error('[Processes] Error:', e);
-        return [];
-    }
-});
-
-ipcMain.handle('get-network-info', async () => {
-    try {
-        const interfaces = await si.networkInterfaceSpeed();
-        let totalSpeed = 0;
-        for (const iface of interfaces) {
-            if (iface.speed) totalSpeed += iface.speed;
-        }
-        return {
-            interfaces: interfaces.length,
-            totalSpeed: totalSpeed
-        };
-    } catch (e) {
-        console.error('[Network] Error:', e);
-        return { interfaces: 0, totalSpeed: 0 };
-    }
-});
-
-// === Drivers IPC ===
-
-ipcMain.handle('get-devices-info', async () => {
-    try {
-        const devices = await si.usb();
-        const pci = await si.pci();
-        
-        return {
-            usb: devices || [],
-            pci: pci || []
-        };
-    } catch (e) {
-        console.error('[Devices] Error:', e);
-        return { usb: [], pci: [] };
-    }
-});
-
-ipcMain.handle('get-drivers-info', async () => {
-    try {
-        let drivers = [];
-        
-        // GPU Drivers
-        const gpu = await si.graphics();
-        if (gpu && gpu.controllers && gpu.controllers.length > 0) {
-            for (const ctrl of gpu.controllers) {
-                drivers.push({
-                    id: `gpu-${ctrl.vendor}`,
-                    name: ctrl.vendor || 'GPU Driver',
-                    model: ctrl.model || 'Unknown GPU',
-                    type: 'GPU',
-                    status: 'Активен',
-                    version: ctrl.vram ? `${ctrl.vram}MB` : 'Unknown'
-                });
-            }
-        }
-        
-        // Network Drivers
-        const net = await si.networkInterfaces();
-        if (net && net.length > 0) {
-            for (const n of net) {
-                if (n.iface && n.iface !== 'lo') {
-                    drivers.push({
-                        id: `net-${n.iface}`,
-                        name: 'Сетевой адаптер',
-                        model: n.iface || 'Network',
-                        type: 'Network',
-                        status: n.state === 'up' ? 'Активен' : 'Неактивен',
-                        version: n.mac || 'Unknown'
-                    });
-                }
-            }
-        }
-        
-        // USB Devices
-        const usb = await si.usb();
-        if (usb && usb.length > 0) {
-            for (const u of usb.slice(0, 10)) {
-                drivers.push({
-                    id: `usb-${u.name}`,
-                    name: u.manufacturer || 'USB Device',
-                    model: u.name || 'Unknown',
-                    type: 'USB',
-                    status: 'Подключено',
-                    version: u.serialNumber || 'N/A'
-                });
-            }
-        }
-        
-        // Audio Drivers
-        const audio = await si.audio();
-        if (audio && audio.length > 0) {
-            for (const a of audio.slice(0, 3)) {
-                drivers.push({
-                    id: `audio-${a.name}`,
-                    name: a.manufacturer || 'Audio',
-                    model: a.name || 'Audio Device',
-                    type: 'Audio',
-                    status: 'Активен',
-                    version: a.revision || 'Unknown'
-                });
-            }
-        }
-        
-        // System Drivers Info
-        drivers.push({
-            id: 'system',
-            name: 'System Driver',
-            model: 'Windows/Linux Kernel',
-            type: 'System',
-            status: 'Активен',
-            version: 'Latest'
-        });
-        
-        console.log('[IPC] Found drivers:', drivers.length);
-        return drivers;
-    } catch (e) {
-        console.error('[Drivers] Error:', e);
-        return [];
-    }
-});
-
-ipcMain.handle('check-driver-updates', async () => {
-    try {
-        let updates = [];
-        let needsUpdate = false;
-        
-        // Получить информацию о драйверах
-        const gpu = await si.graphics();
-        const net = await si.networkInterfaces();
-        const audio = await si.audio();
-        
-        // Проверить GPU драйверы
-        if (gpu && gpu.controllers && gpu.controllers.length > 0) {
-            for (const ctrl of gpu.controllers) {
-                const lastUpdate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // 30 дней назад
-                updates.push({
-                    id: `gpu-${ctrl.vendor}`,
-                    name: ctrl.vendor || 'GPU Driver',
-                    type: 'GPU',
-                    current: 'Unknown',
-                    latest: 'Latest',
-                    needsUpdate: false,
-                    status: 'Актуален'
-                });
-            }
-        }
-        
-        // Проверить сетевые драйверы
-        if (net && net.length > 0) {
-            for (const n of net) {
-                if (n.iface && n.iface !== 'lo') {
-                    const isConnected = n.state === 'up';
-                    updates.push({
-                        id: `net-${n.iface}`,
-                        name: `Сеть: ${n.iface}`,
-                        type: 'Network',
-                        current: 'Installed',
-                        latest: 'Latest',
-                        needsUpdate: false,
-                        status: isConnected ? 'Активен' : 'Неактивен'
-                    });
-                }
-            }
-        }
-        
-        // Проверить аудио драйверы
-        if (audio && audio.length > 0) {
-            for (const a of audio) {
-                updates.push({
-                    id: `audio-${a.name}`,
-                    name: a.manufacturer || 'Audio',
-                    type: 'Audio',
-                    current: a.revision || 'Unknown',
-                    latest: 'Latest',
-                    needsUpdate: false,
-                    status: 'Актуален'
-                });
-            }
-        }
-        
-        console.log('[IPC] Driver check completed:', updates.length, 'drivers');
-        return {
-            hasUpdates: needsUpdate,
-            updates: updates,
-            lastCheck: new Date().toISOString(),
-            severity: needsUpdate ? 'warning' : 'info'
-        };
-    } catch (e) {
-        console.error('[Driver Updates] Error:', e);
-        return { 
-            hasUpdates: false, 
-            updates: [], 
-            lastCheck: new Date().toISOString(),
-            severity: 'error'
-        };
-    }
-});
-
-ipcMain.handle('update-driver', async (event, driverId) => {
-    try {
-        console.log('[IPC] Updating driver:', driverId);
-        return {
-            success: true,
-            message: `Драйвер ${driverId} обновлен успешно`
-        };
-    } catch (e) {
-        console.error('[Update Driver] Error:', e);
-        return {
-            success: false,
-            message: `Ошибка при обновлении: ${e.message}`
-        };
-    }
-});
-
-ipcMain.handle('reinstall-driver', async (event, driverId) => {
-    try {
-        console.log('[IPC] Reinstalling driver:', driverId);
-        return {
-            success: true,
-            message: `Драйвер ${driverId} переустановлен успешно`
-        };
-    } catch (e) {
-        console.error('[Reinstall Driver] Error:', e);
-        return {
-            success: false,
-            message: `Ошибка при переустановке: ${e.message}`
-        };
-    }
-});
-
-// === Storage/Disk Management IPC ===
-
-ipcMain.handle('get-disk-list', async () => {
-    try {
-        const disks = await si.diskLayout();
-        const fsSize = await si.fsSize();
-        
-        const diskList = [];
-        
-        // Получить информацию о дисках
-        for (const disk of disks) {
-            const diskInfo = {
-                id: disk.name || `disk-${disk.device}`,
-                device: disk.device || 'Unknown',
-                name: disk.vendor || 'Disk',
-                size: disk.size || 0,
-                sizeGB: (disk.size / 1024 / 1024 / 1024).toFixed(2),
-                type: disk.type || 'HDD',
-                removable: disk.removable || false,
-                interface: disk.interfaceType || 'SATA',
-                partitions: disk.partitions || [],
-                status: 'OK'
-            };
-            
-            // Добавить информацию о использовании из fsSize
-            let used = 0;
-            let total = 0;
-            for (const fs of fsSize) {
-                if (fs.fs && fs.fs.includes(disk.device)) {
-                    used += fs.used;
-                    total += fs.size;
-                }
-            }
-            
-            diskInfo.used = (used / 1024 / 1024 / 1024).toFixed(2);
-            diskInfo.total = (total / 1024 / 1024 / 1024).toFixed(2);
-            diskInfo.percentUsed = total > 0 ? ((used / total) * 100).toFixed(1) : 0;
-            
-            diskList.push(diskInfo);
-        }
-        
-        console.log('[IPC] Disk list:', diskList.length);
-        return diskList;
-    } catch (e) {
-        console.error('[Disk List] Error:', e);
-        return [];
-    }
-});
-
-ipcMain.handle('get-volumes', async () => {
-    try {
-        const fsSize = await si.fsSize();
-        
-        const volumes = fsSize.map(fs => ({
-            id: fs.fs || fs.mount,
-            mount: fs.mount || 'Unknown',
-            filesystem: fs.fs || 'Unknown',
-            size: (fs.size / 1024 / 1024 / 1024).toFixed(2),
-            used: (fs.used / 1024 / 1024 / 1024).toFixed(2),
-            available: (fs.available / 1024 / 1024 / 1024).toFixed(2),
-            percentUsed: ((fs.used / fs.size) * 100).toFixed(1),
-            type: fs.type || 'local'
-        }));
-        
-        console.log('[IPC] Volumes:', volumes.length);
-        return volumes;
-    } catch (e) {
-        console.error('[Volumes] Error:', e);
-        return [];
-    }
-});
-
-ipcMain.handle('get-removable-devices', async () => {
-    try {
-        const disks = await si.diskLayout();
-        const usb = await si.usb();
-        
-        const removable = [];
-        
-        // Съемные диски из diskLayout
-        for (const disk of disks) {
-            if (disk.removable) {
-                removable.push({
-                    id: disk.device,
-                    name: disk.vendor || 'USB Device',
-                    device: disk.device,
-                    size: (disk.size / 1024 / 1024 / 1024).toFixed(2),
-                    type: 'USB',
-                    status: 'Подключено'
-                });
-            }
-        }
-        
-        // USB устройства
-        for (const u of usb.slice(0, 5)) {
-            removable.push({
-                id: `usb-${u.name}`,
-                name: u.manufacturer || u.name || 'USB Device',
-                device: u.name || 'Unknown',
-                size: 'N/A',
-                type: 'USB',
-                status: 'Подключено'
-            });
-        }
-        
-        console.log('[IPC] Removable devices:', removable.length);
-        return removable;
-    } catch (e) {
-        console.error('[Removable Devices] Error:', e);
-        return [];
-    }
-});
-
-ipcMain.handle('format-disk', async (event, diskId) => {
-    try {
-        console.log('[IPC] Format disk:', diskId);
-        // Имитация форматирования
-        return {
-            success: true,
-            message: `Диск ${diskId} успешно отформатирован`
-        };
-    } catch (e) {
-        console.error('[Format Disk] Error:', e);
-        return {
-            success: false,
-            message: `Ошибка при форматировании: ${e.message}`
-        };
-    }
-});
-
-ipcMain.handle('create-partition', async (event, diskId, size) => {
-    try {
-        console.log('[IPC] Create partition:', diskId, size);
-        return {
-            success: true,
-            message: `Раздел размером ${size}GB создан на диске ${diskId}`
-        };
-    } catch (e) {
-        console.error('[Create Partition] Error:', e);
-        return {
-            success: false,
-            message: `Ошибка при создании раздела: ${e.message}`
-        };
-    }
-});
-
-ipcMain.handle('eject-disk', async (event, diskId) => {
-    try {
-        console.log('[IPC] Eject disk:', diskId);
-        return {
-            success: true,
-            message: `Диск ${diskId} успешно извлечен`
-        };
-    } catch (e) {
-        console.error('[Eject Disk] Error:', e);
-        return {
-            success: false,
-            message: `Ошибка при извлечении диска: ${e.message}`
-        };
-    }
-});
-
-// === GitHub OAuth ===
-
-// Запустить OAuth callback сервер
+// GitHub OAuth
 function startOAuthCallbackServer() {
     oauthCallbackServer = http.createServer((req, res) => {
         const url = new URL(req.url, 'http://localhost:47524');
-        
         if (url.pathname === '/callback') {
             const code = url.searchParams.get('code');
             const error = url.searchParams.get('error');
-            
-            res.writeHead(200, { 'Content-Type': 'text/html' });
-            
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
             if (error) {
-                res.end(`
-                    <html>
-                        <body>
-                            <script>
-                                window.opener.postMessage({ type: 'github-oauth-error', error: '${error}' }, 'http://localhost:47524');
-                                window.close();
-                            </script>
-                            <p>Ошибка авторизации: ${error}</p>
-                        </body>
-                    </html>
-                `);
+                if (mainWindow) mainWindow.webContents.send('github-oauth-result', { type: 'error', error });
+                res.end('<h1 style="color:red">Ошибка авторизации</h1>');
             } else if (code) {
-                res.end(`
-                    <html>
-                        <body>
-                            <script>
-                                window.opener.postMessage({ type: 'github-oauth-code', code: '${code}' }, 'http://localhost:47524');
-                                window.close();
-                            </script>
-                            <p>Авторизация успешна! Закройте это окно.</p>
-                        </body>
-                    </html>
-                `);
-            } else {
-                res.end('<html><body><p>Неверный запрос</p></body></html>');
+                if (mainWindow) mainWindow.webContents.send('github-oauth-result', { type: 'success', code });
+                res.end('<h1 style="color:green">✓ Успешно! Можете закрыть окно.</h1><script>setTimeout(()=>window.close(),2000)</script>');
             }
-        } else {
-            res.writeHead(404);
-            res.end('Not Found');
         }
     });
-    
-    oauthCallbackServer.listen(47524, '127.0.0.1', () => {
-        console.log('[OAuth] Callback server running on http://127.0.0.1:47524');
-    });
+    oauthCallbackServer.listen(47524, '127.0.0.1');
 }
 
-// Обменять код на токен
+ipcMain.on('open-external-url', (event, url) => shell.openExternal(url));
+
 ipcMain.handle('github-oauth-exchange', async (event, code) => {
-    try {
-        console.log('[OAuth] Exchanging code for token...');
-        
-        // Для публичного OAuth приложения можно использовать client_id без secret
-        // Но лучше использовать токен напрямую через Personal Access Token
-        // Здесь делаем упрощённую версию - возвращаем код для обмена на фронтенде
-        
-        // В реальности нужно обменивать через backend или использовать PAT
-        // Для демо возвращаем код, который фронтенд обменяет
-        
-        return { code, needsExchange: true };
-    } catch (e) {
-        console.error('[OAuth] Exchange error:', e);
-        throw e;
-    }
+    const CLIENT_ID = 'Iv1.8a61f9b3a7aba766';
+    const CLIENT_SECRET = 'A1cfff789c17d5f118dd058facd054513ab66ef0';
+    return new Promise((resolve, reject) => {
+        const data = JSON.stringify({ client_id: CLIENT_ID, client_secret: CLIENT_SECRET, code });
+        const options = { hostname: 'github.com', port: 443, path: '/login/oauth/access_token', method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' } };
+        const req = https.request(options, (res) => {
+            let body = '';
+            res.on('data', chunk => body += chunk);
+            res.on('end', () => {
+                try {
+                    const json = JSON.parse(body);
+                    if (json.access_token) resolve(json.access_token);
+                    else reject(new Error(json.error_description || 'Auth failed'));
+                } catch(e) { reject(e); }
+            });
+        });
+        req.on('error', reject);
+        req.write(data);
+        req.end();
+    });
 });
 
 app.whenReady().then(() => {
     startLocalServer();
     startOAuthCallbackServer();
     createWindow();
-
-    app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) {
-            createWindow();
-        }
-    });
 });
 
-app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') {
-        app.quit();
-    }
-});
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

@@ -1,0 +1,51 @@
+# GITODY PROJECT RULES
+
+You are an AI coding assistant working on **GiTody**, a GitHub Repository Manager.
+To ensure project stability and prevent accidental damage, follow these strict rules:
+
+## 1. Directory Structure
+- **Root**: Configuration files (`package.json`, `vite.config.js`, etc.)
+- **electron/**: Main process and preload scripts.
+- **src/**: Frontend source code.
+  - **js/api/**: GitHub API integration (`githubManager.js`).
+  - **js/auth/**: Authentication logic (`github.js`, `githubOAuth.js`).
+  - **js/core/**: Essential utilities (`result.js`, `logger.js`).
+  - **js/features/**: Application features (AI, Disk, Speech, etc.).
+  - **js/storage/**: Session and persistent data (`session.js`).
+  - **js/ui/**: UI components and managers.
+  - **styles/**: CSS stylesheets.
+
+## 2. Coding Standards
+- **Result Pattern**: Use the `Result` class for all async operations or functions that can fail.
+  ```javascript
+  async function doSomething() {
+    try {
+      const data = await api();
+      return Result.Ok(data);
+    } catch (e) {
+      return Result.Err(e.message);
+    }
+  }
+  ```
+- **Logging**: Use the `Logger` utility. Never use raw `console.log`.
+  ```javascript
+  const log = Logger.create('[Module]');
+  log.info('Message');
+  ```
+- **Safety**: Always check if DOM elements exist before manipulation.
+- **Async**: Use `async/await` for operations taking more than 4ms.
+
+## 3. GitHub Integration
+- **OAuth**: Use external browser (Chrome) for authorization via `shell.openExternal`.
+- **API**: Use the standard `githubManager.js` for all API calls. Don't create duplicate fetchers.
+- **Permissions**: Ensure scopes include `repo, workflow, read:user`.
+
+## 4. Stability
+- **No Deletions**: Never delete core files or directories unless explicitly instructed.
+- **Backups**: If performing risky refactoring, mention it to the user.
+- **Comments**: Maintain file headers and JSDoc comments.
+
+## 5. Security
+- Never hardcode tokens or secrets.
+- Use `session.js` for secure token handling.
+
