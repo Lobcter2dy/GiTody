@@ -354,411 +354,53 @@ export class GitHubManager {
         if (el) el.innerHTML = list.filter(i => !i.pull_request).map(i => `<div class="card">#${i.number} ${i.title}</div>`).join('');
     }
 
+    formatDate(isoString) {
+        if (!isoString) return '';
+        return new Date(isoString).toLocaleString('ru-RU', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+    }
+
     renderCommits(list) {
         const el = document.getElementById('commitsList');
-        if (el) el.innerHTML = list.map(c => `<div class="card"><code>${c.sha.slice(0, 7)}</code> ${c.commit.message}</div>`).join('');
-    }
-
-    renderReleases(list) {
-        const el = document.getElementById('releasesList');
-        if (el) el.innerHTML = list.map(r => `<div class="card"><b>${r.tag_name}</b> ${r.name || ''}</div>`).join('');
-    }
-
-    renderWorkflows(list) {
-        const el = document.getElementById('actionsList');
-        if (el) el.innerHTML = list.map(w => `
+        if (el) el.innerHTML = list.map(c => `
             <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
-                <span>${w.name}</span>
-                <button class="btn btn-sm" onclick="githubManager.runWorkflow('${w.id}')">Run</button>
+                <div style="flex:1">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <code style="background:rgba(88,166,255,0.1); color:#58a6ff; padding:2px 6px; border-radius:4px; font-size:12px;">
+                            ${c.sha.slice(0, 7)}
+                        </code>
+                        <span style="font-weight:500; color:#e6edf3;">${c.commit.message.split('\n')[0]}</span>
+                    </div>
+                    <div style="font-size:11px; color:#8b949e; margin-top:4px; display:flex; gap:10px;">
+                        <span>👤 ${c.commit.author.name}</span>
+                        <span>📅 ${this.formatDate(c.commit.author.date)}</span>
+                    </div>
+                </div>
+                <a href="${c.html_url}" target="_blank" class="btn btn-sm" style="background:transparent; border:1px solid #30363d; color:#8b949e;">View</a>
             </div>
         `).join('');
     }
-
-    renderFileTree(list) {
-        const el = document.getElementById('repoFileTree');
-        if (!el) return;
-        el.innerHTML = list.map(item => `
-            <div class="tree-item" onclick="githubManager.${item.type === 'dir' ? 'toggleFolder' : 'previewFileContent'}('${item.path}')">
-                ${item.type === 'dir' ? '📁' : '📄'} ${item.name}
-            </div>
-        `).join('');
-    }
-
-    async previewFileContent(path) {
-        if (!this.currentRepo) return;
-        const res = await this.fetchApi(`/repos/${this.currentRepo.full_name}/contents/${path}`);
-        if (res.isOk && res.value.content) {
-            const decoded = atob(res.value.content.replace(/\s/g, ''));
-            const preview = document.getElementById('codePreview');
-            const contentArea = document.getElementById('previewContent');
-            if (preview && contentArea) {
-                preview.style.display = 'block';
-                document.getElementById('previewFileName').textContent = path;
-                contentArea.value = decoded;
-            }
-        }
-    }
-
-    /**
-     * Применить изменения из текстовой области просмотра
-     */
-    async applyEditedChanges() {
-        const path = document.getElementById('previewFileName').textContent;
-        const content = document.getElementById('previewContent').value;
-
-        if (!path) return;
-
-        const res = await this.saveFile(path, content);
-        if (res.isOk) {
-            alert('Изменения успешно применены к GitHub!');
-            this.closePreview();
-        } else {
-            alert('Ошибка при применении изменений: ' + res.error);
-        }
-    }
-
-    closePreview() {
-        const preview = document.getElementById('codePreview');
-        if (preview) preview.style.display = 'none';
-    }
-
-    async toggleFolder(path) {
-        log.info(`Toggling folder: ${path}`);
-        // Simple implementation - just reload for now
-        const res = await this.fetchApi(`/repos/${this.currentRepo.full_name}/contents/${path}`);
-        if (res.isOk) this.renderFileTree(res.value);
-    }
-
-    /**
-     * Рендеринг подробной информации о репозитории (таб Information)
-     */
-    async renderRepoInfo() {
-        if (!this.currentRepo) return;
-        const container = document.getElementById('repoInfoPage');
-        if (!container) return;
-
-        const repo = this.currentRepo;
-        container.innerHTML = `
-            <div class="repo-info-container" style="padding:20px; background: #161b22; border-radius: 12px; border: 1px solid #30363d;">
-                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px;">
-                    <div>
-                        <h1 style="margin:0; font-size:24px; color:#58a6ff;">${repo.full_name}</h1>
-                        <p style="color:#8b949e; margin:10px 0;">${repo.description || 'Нет описания'}</p>
-                        ${repo.homepage ? `<a href="${repo.homepage}" target="_blank" style="color:#58a6ff; font-size:12px;">🔗 ${repo.homepage}</a>` : ''}
-                    </div>
-                    <div style="display:flex; gap:10px;">
-                        <button class="btn btn-sm" onclick="githubManager.cloneCurrentRepo()">Clone to PC</button>
-                        <button class="btn btn-sm" onclick="githubManager.syncAll()">Refresh</button>
-                        <a href="${repo.html_url}" target="_blank" class="btn btn-sm" style="background:#30363d;">View on GitHub</a>
-                    </div>
-                </div>
-                
-                <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:15px; margin-bottom:30px;">
-                    <div class="card" style="text-align:center;">
-                        <div style="font-size:20px; font-weight:bold; color:#d29922;">⭐ ${repo.stargazers_count}</div>
-                        <div style="font-size:11px; color:#8b949e;">Stars</div>
-                    </div>
-                    <div class="card" style="text-align:center;">
-                        <div style="font-size:20px; font-weight:bold; color:#58a6ff;">🍴 ${repo.forks_count}</div>
-                        <div style="font-size:11px; color:#8b949e;">Forks</div>
-                    </div>
-                    <div class="card" style="text-align:center;">
-                        <div style="font-size:20px; font-weight:bold; color:#3fb950;">👁️ ${repo.watchers_count}</div>
-                        <div style="font-size:11px; color:#8b949e;">Watchers</div>
-                    </div>
-                    <div class="card" style="text-align:center;">
-                        <div style="font-size:20px; font-weight:bold; color:#f85149;">❗ ${repo.open_issues_count}</div>
-                        <div style="font-size:11px; color:#8b949e;">Issues</div>
-                    </div>
-                </div>
-
-                <div class="settings-tabs" style="margin-bottom: 20px; border-bottom: 1px solid #30363d;">
-                    <button class="btn btn-sm" onclick="githubManager.showSettingsTab('general')" style="margin-right: 10px;">General</button>
-                    <button class="btn btn-sm" onclick="githubManager.showSettingsTab('features')" style="margin-right: 10px;">Features</button>
-                    <button class="btn btn-sm" onclick="githubManager.showSettingsTab('automation')">Automation</button>
-                </div>
-
-                <div id="settings-content-general">
-                    <div class="settings-group">
-                        <h3 style="font-size:14px; text-transform:uppercase; color:#8b949e; border-bottom:1px solid #30363d; padding-bottom:10px;">General Settings</h3>
-                        <div style="display:flex; flex-direction:column; gap:12px; margin-top:15px;">
-                            <label>
-                                <span style="display:block; margin-bottom:5px; color:#8b949e;">Description</span>
-                                <input type="text" class="form-control" value="${repo.description || ''}" id="repoDescription" style="width:100%; padding:8px; background:#0d1117; border:1px solid #30363d; color:#c9d1d9; border-radius:6px;">
-                            </label>
-                            <label>
-                                <span style="display:block; margin-bottom:5px; color:#8b949e;">Website</span>
-                                <input type="text" class="form-control" value="${repo.homepage || ''}" id="repoHomepage" style="width:100%; padding:8px; background:#0d1117; border:1px solid #30363d; color:#c9d1d9; border-radius:6px;">
-                            </label>
-                            <label>
-                                <span style="display:block; margin-bottom:5px; color:#8b949e;">Default Branch</span>
-                                <input type="text" class="form-control" value="${repo.default_branch}" id="repoDefaultBranch" style="width:100%; padding:8px; background:#0d1117; border:1px solid #30363d; color:#c9d1d9; border-radius:6px;">
-                            </label>
-                            <label style="display:flex; align-items:center; gap:10px; cursor:pointer; margin-top:5px;">
-                                <input type="checkbox" id="repoVisibility" ${repo.private ? 'checked' : ''}>
-                                <span style="color:#f85149;">Private Repository</span>
-                            </label>
-                            <button class="btn btn-primary" onclick="githubManager.saveGeneralSettings()">Save Changes</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="settings-content-features" style="display:none;">
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:30px;">
-                        <div class="settings-group">
-                            <h3 style="font-size:14px; text-transform:uppercase; color:#8b949e; border-bottom:1px solid #30363d; padding-bottom:10px;">Features</h3>
-                            <div style="display:flex; flex-direction:column; gap:12px; margin-top:15px;">
-                                <label style="display:flex; justify-content:space-between; cursor:pointer;">
-                                    <span>Issues</span>
-                                    <input type="checkbox" ${repo.has_issues ? 'checked' : ''} onchange="githubManager.updateRepoSetting('has_issues', this.checked)">
-                                </label>
-                                <label style="display:flex; justify-content:space-between; cursor:pointer;">
-                                    <span>Wiki</span>
-                                    <input type="checkbox" ${repo.has_wiki ? 'checked' : ''} onchange="githubManager.updateRepoSetting('has_wiki', this.checked)">
-                                </label>
-                                <label style="display:flex; justify-content:space-between; cursor:pointer;">
-                                    <span>Projects</span>
-                                    <input type="checkbox" ${repo.has_projects ? 'checked' : ''} onchange="githubManager.updateRepoSetting('has_projects', this.checked)">
-                                </label>
-                                <label style="display:flex; justify-content:space-between; cursor:pointer;">
-                                    <span>Discussions</span>
-                                    <input type="checkbox" ${repo.has_discussions ? 'checked' : ''} onchange="githubManager.updateRepoSetting('has_discussions', this.checked)">
-                                </label>
-                            </div>
-                        </div>
-                        <div class="settings-group">
-                            <h3 style="font-size:14px; text-transform:uppercase; color:#8b949e; border-bottom:1px solid #30363d; padding-bottom:10px;">Security</h3>
-                            <div style="display:flex; flex-direction:column; gap:12px; margin-top:15px;">
-                                <button class="btn btn-sm" onclick="githubManager.toggleDependabot()">Manage Dependabot</button>
-                                <button class="btn btn-sm" onclick="githubManager.toggleSecretScanning()">Manage Secret Scanning</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="settings-content-automation" style="display:none;">
-                    <div class="settings-group">
-                         <h3 style="font-size:14px; text-transform:uppercase; color:#8b949e; border-bottom:1px solid #30363d; padding-bottom:10px;">Automation & Actions</h3>
-                         <div id="workflowRunsList" style="margin-top:15px;">
-                            <button class="btn btn-sm" onclick="githubManager.loadWorkflowRuns()">Load Workflow Runs</button>
-                         </div>
-                    </div>
-                </div>
-
-                <div style="margin-top:30px;">
-                    <h3 style="font-size:14px; text-transform:uppercase; color:#8b949e; border-bottom:1px solid #30363d; padding-bottom:10px;">Repository Topics</h3>
-                    <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;">
-                        ${repo.topics?.map(t => `<span class="topic-tag" style="background:rgba(88,166,255,0.1); color:#58a6ff; padding:4px 10px; border-radius:12px; font-size:12px;">${t}</span>`).join('') || '<span style="color:#8b949e">Нет тем</span>'}
-                        <button class="btn btn-sm" style="border-radius:12px;" onclick="githubManager.promptEditTopics()">Edit</button>
-                    </div>
-                </div>
-                
-                <div style="margin-top:30px; padding-top:20px; border-top:1px solid #30363d;">
-                    <h3 style="font-size:14px; text-transform:uppercase; color:#8b949e; margin-bottom:15px;">File Operations</h3>
-                    <div style="display:flex; gap:10px;">
-                        <input type="file" id="fileUploadInput" multiple style="display:none" onchange="githubManager.handleFileUpload(this)">
-                        <button class="btn btn-primary" onclick="document.getElementById('fileUploadInput').click()">Upload Files</button>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    showSettingsTab(tabName) {
-        ['general', 'features', 'automation'].forEach(t => {
-            const el = document.getElementById(`settings-content-${t}`);
-            if (el) el.style.display = t === tabName ? 'block' : 'none';
-        });
-    }
-
-    async saveGeneralSettings() {
-        if (!this.currentRepo) return;
-        const description = document.getElementById('repoDescription').value;
-        const homepage = document.getElementById('repoHomepage').value;
-        const default_branch = document.getElementById('repoDefaultBranch').value;
-        const isPrivate = document.getElementById('repoVisibility').checked;
-
-        if (isPrivate !== this.currentRepo.private) {
-            const action = isPrivate ? 'make PRIVATE' : 'make PUBLIC';
-            if (!confirm(`Are you sure you want to ${action} this repository?`)) return;
-        }
-
-        const res = await this.fetchApi(`/repos/${this.currentRepo.full_name}`, {
-            method: 'PATCH',
-            body: JSON.stringify({ description, homepage, default_branch, private: isPrivate })
-        });
-
-        if (res.isOk) {
-            alert('Settings saved!');
-            this.currentRepo = res.value;
-            this.renderRepoInfo();
-        } else {
-            alert('Error saving settings: ' + res.error);
-        }
-    }
-
-    async cloneCurrentRepo() {
-        if (!this.currentRepo) return;
-        
-        try {
-            const targetPath = await window.ipcRenderer.invoke('dialog-open-directory');
-            if (!targetPath) return;
-
-            const confirmMsg = `Clone ${this.currentRepo.full_name} to ${targetPath}?`;
-            if (!confirm(confirmMsg)) return;
-
-            const logEl = document.getElementById('sync-info');
-            if (logEl) logEl.textContent = 'Cloning...';
-
-            // Check if git is available/mocked? 
-            // We assume the user has git installed on their system as this is an Electron app running locally.
-            const result = await window.ipcRenderer.invoke('git-clone', {
-                url: this.currentRepo.clone_url,
-                targetPath: `${targetPath}/${this.currentRepo.name}`,
-                token: this.token
-            });
-
-            alert('Repository cloned successfully!\n' + result);
-            if (logEl) logEl.textContent = 'Cloned successfully';
-        } catch (e) {
-            alert('Clone failed: ' + e);
-            log.error('Clone error', e);
-        }
-    }
-
-    async handleFileUpload(input) {
-        if (!this.currentRepo || !input.files.length) return;
-        
-        const files = Array.from(input.files);
-        
-        // Filter large files (>50MB)
-        const largeFiles = files.filter(f => f.size > 50 * 1024 * 1024);
-        if (largeFiles.length > 0) {
-            alert(`Skipping files larger than 50MB: ${largeFiles.map(f => f.name).join(', ')}`);
-        }
-        
-        const validFiles = files.filter(f => f.size <= 50 * 1024 * 1024);
-        if (validFiles.length === 0) return;
-
-        if (!confirm(`Upload ${validFiles.length} files to root of ${this.currentRepo.name}?`)) return;
-
-        let successCount = 0;
-        const total = validFiles.length;
-        
-        const infoEl = document.getElementById('sync-info');
-        if (infoEl) infoEl.textContent = `Uploading 0/${total}...`;
-
-        for (let i = 0; i < validFiles.length; i++) {
-            const file = validFiles[i];
-            try {
-                if (infoEl) infoEl.textContent = `Uploading ${i+1}/${total}: ${file.name}...`;
-                
-                const content = await this.readFileAsBase64(file);
-                const path = file.webkitRelativePath || file.name;
-                
-                const res = await this.fetchApi(`/repos/${this.currentRepo.full_name}/contents/${path}`, {
-                    method: 'PUT',
-                    body: JSON.stringify({
-                        message: `Upload ${file.name}`,
-                        content: content,
-                        branch: this.currentRepo.default_branch
-                    })
-                });
-
-                if (res.isOk) successCount++;
-            } catch (e) {
-                log.error(`Failed to upload ${file.name}`, e);
-            }
-        }
-
-        if (infoEl) infoEl.textContent = `Upload complete: ${successCount}/${total}`;
-        alert(`Uploaded ${successCount}/${total} files.`);
-        await this.loadRepoData();
-        input.value = ''; // clear
-    }
-
-    readFileAsBase64(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-                // remove data:.*;base64, prefix
-                const base64 = reader.result.split(',')[1];
-                resolve(base64);
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-    }
-
-    async loadWorkflowRuns() {
-        if (!this.currentRepo) return;
-        const res = await this.fetchApi(`/repos/${this.currentRepo.full_name}/actions/runs`);
-        if (res.isOk) {
-            const list = document.getElementById('workflowRunsList');
-            if (list) {
-                list.innerHTML = res.value.workflow_runs.map(run => `
-                    <div class="card" style="margin-bottom:10px; border-left: 4px solid ${run.conclusion === 'success' ? '#3fb950' : '#f85149'}">
-                        <div style="display:flex; justify-content:space-between;">
-                            <b>${run.name}</b>
-                            <span style="font-size:12px; color:#8b949e;">${new Date(run.created_at).toLocaleString()}</span>
-                        </div>
-                        <div style="font-size:12px; margin-top:5px;">
-                            Status: ${run.status} • Conclusion: ${run.conclusion || 'pending'}
-                        </div>
-                        <div style="margin-top:5px;">
-                             <a href="${run.html_url}" target="_blank" class="btn btn-sm" style="font-size:10px;">View Logs</a>
-                        </div>
-                    </div>
-                `).join('');
-            }
-        }
-    }
-
-    async toggleDependabot() {
-        if (!this.currentRepo) return;
-        const confirmMsg = "Хотите добавить/обновить конфигурацию Dependabot (.github/dependabot.yml)?";
-        if (!confirm(confirmMsg)) return;
-
-        const config = `version: 2
-updates:
-  - package-ecosystem: "npm"
-    directory: "/"
-    schedule:
-      interval: "daily"`;
-
-        const res = await this.saveFile('.github/dependabot.yml', config, 'Configure Dependabot');
-        if (res.isOk) alert('Dependabot сконфигурирован!');
-    }
-
-    async promptEditTopics() {
-        if (!this.currentRepo) return;
-        const currentTopics = this.currentRepo.topics?.join(', ') || '';
-        const newTopics = prompt('Введите темы через запятую:', currentTopics);
-        if (newTopics === null) return;
-
-        const topics = newTopics.split(',').map(t => t.trim()).filter(Boolean);
-        const res = await this.fetchApi(`/repos/${this.currentRepo.full_name}/topics`, {
-            method: 'PUT',
-            body: JSON.stringify({ names: topics })
-        });
-
-        if (res.isOk) {
-            alert('Темы обновлены!');
-            await this.selectRepo(this.currentRepo.full_name);
-        }
-    }
-
+    
     async toggleSecretScanning() {
-        alert('Для настройки расширенной безопасности (Secret Scanning) требуются права администратора организации или GitHub Enterprise.');
-    }
-
-    async importRepo() {
-        const name = prompt('Введите название для нового репозитория:');
-        if (!name) return;
-
-        const res = await this.createRepo(name);
-        if (res.isOk) {
-            alert('Репозиторий создан! Теперь вы можете добавить в него файлы через вкладку Files -> Apply Changes.');
+        if (!this.currentRepo) return;
+        try {
+            const check = await this.fetchApi(`/repos/${this.currentRepo.full_name}/vulnerability-alerts`, {
+                method: 'GET'
+            });
+            
+            if (check.isOk) {
+                const res = await this.fetchApi(`/repos/${this.currentRepo.full_name}/vulnerability-alerts`, { method: 'DELETE' });
+                if (res.isOk) alert('Vulnerability alerts disabled');
+                else alert('Error disabling: ' + res.error);
+            } else {
+                const res = await this.fetchApi(`/repos/${this.currentRepo.full_name}/vulnerability-alerts`, { method: 'PUT' });
+                if (res.isOk) alert('Vulnerability alerts enabled!');
+                else alert('Error enabling (Need Admin Rights): ' + res.error);
+            }
+        } catch (e) {
+            alert('Not supported or Access Denied: ' + e.message);
         }
     }
 }

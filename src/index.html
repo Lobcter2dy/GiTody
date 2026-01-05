@@ -130,6 +130,7 @@
                         <button class="github-icon-btn" data-section="branches" title="Branches">🌿</button>
                         <button class="github-icon-btn" data-section="pullrequests" title="PRs">🔀</button>
                         <button class="github-icon-btn" data-section="issues" title="Issues">❗</button>
+                        <button class="github-icon-btn" data-section="commits" title="Commits">🕒</button>
                         <button class="github-icon-btn" data-section="actions" title="Actions">⚡</button>
                         <button class="github-icon-btn" data-section="releases" title="Releases">📦</button>
                         <button class="github-icon-btn" data-section="settings" title="Information & Settings">⚙️</button>
@@ -176,6 +177,12 @@
                                 <button class="btn btn-sm btn-primary" onclick="githubManager.promptCreateIssue()">+ New Issue</button>
                             </div>
                             <div id="issuesList"></div>
+                        </div>
+
+                        <!-- Commits -->
+                        <div id="section-commits" class="github-section">
+                            <h3>Commits History</h3>
+                            <div id="commitsList"></div>
                         </div>
 
                         <!-- Actions -->
