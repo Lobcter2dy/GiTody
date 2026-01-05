@@ -84,10 +84,8 @@ async function initApp() {
             }
         }
         
-        // 4. Инициализация модулей (БЕЗ дублирования)
-        systemMonitor.init();
-        systemMonitorReal.init();
-        diskManager.init();
+        // 4. Инициализация модулей (мониторинг НЕ запускается автоматически)
+        // systemMonitor, systemMonitorReal, diskManager - запускаются вручную при переходе на вкладку
         speechManager.init();
         aiManager.init();
         storageManager.init();

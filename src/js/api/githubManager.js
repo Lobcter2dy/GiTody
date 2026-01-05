@@ -1,9 +1,22 @@
 /**
  * GitHub Manager - реальная интеграция с GitHub API
  * Использует session для хранения данных
+ * @module GitHubManager
+ * 
+ * ОПТИМИЗАЦИИ:
+ * - Кеширование API запросов (5 минут)
+ * - Дебаунс для частых операций
+ * - Batch DOM обновления через requestAnimationFrame
  */
 
 import { session } from '../storage/session.js';
+
+const CONFIG = {
+    CACHE_TTL: 5 * 60 * 1000,       // 5 минут TTL кеша
+    DEBOUNCE_RENDER: 50,            // Дебаунс рендера
+    DEBOUNCE_SEARCH: 150,           // Дебаунс поиска
+    MAX_CONCURRENT_REQUESTS: 4,     // Лимит параллельных запросов
+};
 
 export class GitHubManager {
     constructor() {
@@ -12,11 +25,84 @@ export class GitHubManager {
         this.baseUrl = 'https://api.github.com';
         this.folderColors = session.getFolderColors();
         
+        // === Кеш API запросов ===
+        this._cache = new Map();
+        this._pendingRequests = new Map();
+        
+        // === Дебаунс таймеры ===
+        this._renderTimer = null;
+        this._searchTimer = null;
+        
         // Обновить панель после загрузки DOM
         document.addEventListener('DOMContentLoaded', () => {
             this.updateConnectPanel();
             this.initFolderContextMenu();
         });
+    }
+    
+    // === Кеширование API ===
+    _getCacheKey(url) {
+        return `${this.token?.slice(-8) || 'anon'}_${url}`;
+    }
+    
+    _getFromCache(url) {
+        const key = this._getCacheKey(url);
+        const cached = this._cache.get(key);
+        if (cached && Date.now() - cached.timestamp < CONFIG.CACHE_TTL) {
+            return cached.data;
+        }
+        this._cache.delete(key);
+        return null;
+    }
+    
+    _setCache(url, data) {
+        const key = this._getCacheKey(url);
+        this._cache.set(key, { data, timestamp: Date.now() });
+        // Очистка старых записей
+        if (this._cache.size > 100) {
+            const oldest = [...this._cache.entries()]
+                .sort((a, b) => a[1].timestamp - b[1].timestamp)[0];
+            if (oldest) this._cache.delete(oldest[0]);
+        }
+    }
+    
+    // === Оптимизированный fetch с кешем ===
+    async _cachedFetch(url, options = {}) {
+        // Проверить кеш для GET запросов
+        if (!options.method || options.method === 'GET') {
+            const cached = this._getFromCache(url);
+            if (cached) return { ok: true, json: () => Promise.resolve(cached) };
+        }
+        
+        // Dedupe идентичных запросов
+        const pending = this._pendingRequests.get(url);
+        if (pending) return pending;
+        
+        const request = fetch(url, {
+            ...options,
+            headers: this.getHeaders()
+        }).then(async (response) => {
+            this._pendingRequests.delete(url);
+            if (response.ok && (!options.method || options.method === 'GET')) {
+                const data = await response.clone().json();
+                this._setCache(url, data);
+            }
+            return response;
+        }).catch(err => {
+            this._pendingRequests.delete(url);
+            throw err;
+        });
+        
+        this._pendingRequests.set(url, request);
+        return request;
+    }
+    
+    // === Batch DOM обновления ===
+    _scheduleRender(callback) {
+        clearTimeout(this._renderTimer);
+        this._renderTimer = setTimeout(() => {
+            requestAnimationFrame(callback);
+        }, CONFIG.DEBOUNCE_RENDER);
     }
 
     // Получить токен из session
@@ -113,18 +199,16 @@ export class GitHubManager {
         }
     }
 
-    // Загрузить репозитории пользователя
+    // Загрузить репозитории пользователя (с кешем)
     async loadRepositories() {
         if (!this.token) return;
 
         try {
-            const response = await fetch(`${this.baseUrl}/user/repos?per_page=100&sort=updated`, {
-                headers: this.getHeaders()
-            });
+            const response = await this._cachedFetch(`${this.baseUrl}/user/repos?per_page=100&sort=updated`);
 
             if (response.ok) {
                 this.repos = await response.json();
-                this.updateReposList();
+                this._scheduleRender(() => this.updateReposList());
             }
         } catch (error) {
             console.error('[GitHub] Error loading repos:', error);
@@ -399,62 +483,50 @@ export class GitHubManager {
         return icons[ext] || icons.default;
     }
 
-    // Получить ветки
+    // Получить ветки (с кешем)
     async fetchBranches(repoName) {
         try {
-            const response = await fetch(`${this.baseUrl}/repos/${repoName}/branches`, {
-                headers: this.getHeaders()
-            });
+            const response = await this._cachedFetch(`${this.baseUrl}/repos/${repoName}/branches`);
             return response.ok ? await response.json() : [];
         } catch { return []; }
     }
 
-    // Получить Pull Requests
+    // Получить Pull Requests (с кешем)
     async fetchPullRequests(repoName) {
         try {
-            const response = await fetch(`${this.baseUrl}/repos/${repoName}/pulls?state=all&per_page=20`, {
-                headers: this.getHeaders()
-            });
+            const response = await this._cachedFetch(`${this.baseUrl}/repos/${repoName}/pulls?state=all&per_page=20`);
             return response.ok ? await response.json() : [];
         } catch { return []; }
     }
 
-    // Получить Issues
+    // Получить Issues (с кешем)
     async fetchIssues(repoName) {
         try {
-            const response = await fetch(`${this.baseUrl}/repos/${repoName}/issues?state=open&per_page=20`, {
-                headers: this.getHeaders()
-            });
+            const response = await this._cachedFetch(`${this.baseUrl}/repos/${repoName}/issues?state=open&per_page=20`);
             return response.ok ? await response.json() : [];
         } catch { return []; }
     }
 
-    // Получить Commits
+    // Получить Commits (с кешем)
     async fetchCommits(repoName, branch = 'main') {
         try {
-            const response = await fetch(`${this.baseUrl}/repos/${repoName}/commits?per_page=20`, {
-                headers: this.getHeaders()
-            });
+            const response = await this._cachedFetch(`${this.baseUrl}/repos/${repoName}/commits?per_page=20`);
             return response.ok ? await response.json() : [];
         } catch { return []; }
     }
 
-    // Получить языки репозитория
+    // Получить языки репозитория (с кешем)
     async fetchLanguages(repoName) {
         try {
-            const response = await fetch(`${this.baseUrl}/repos/${repoName}/languages`, {
-                headers: this.getHeaders()
-            });
+            const response = await this._cachedFetch(`${this.baseUrl}/repos/${repoName}/languages`);
             return response.ok ? await response.json() : {};
         } catch { return {}; }
     }
 
-    // Получить контрибьюторов
+    // Получить контрибьюторов (с кешем)
     async fetchContributors(repoName) {
         try {
-            const response = await fetch(`${this.baseUrl}/repos/${repoName}/contributors?per_page=10`, {
-                headers: this.getHeaders()
-            });
+            const response = await this._cachedFetch(`${this.baseUrl}/repos/${repoName}/contributors?per_page=10`);
             return response.ok ? await response.json() : [];
         } catch { return []; }
     }
@@ -1325,34 +1397,44 @@ export class GitHubManager {
         if (statIssues) statIssues.textContent = issues;
     }
 
-    // Отрисовать ветки
+    // Отрисовать ветки (оптимизировано)
     renderBranches(branches) {
-        const container = document.getElementById('branchesList');
-        if (!container) return;
+        this._scheduleRender(() => {
+            const container = document.getElementById('branchesList');
+            if (!container) return;
 
-        if (branches.length === 0) {
-            container.innerHTML = '<div class="empty-state">Нет веток</div>';
-            return;
-        }
+            if (branches.length === 0) {
+                container.innerHTML = '<div class="empty-state">Нет веток</div>';
+                return;
+            }
 
-        container.innerHTML = branches.map(branch => `
-            <div class="branch-card ${branch.name === this.currentRepo?.default_branch ? 'default' : ''}">
-                <div class="branch-info">
-                    <span class="branch-name">${branch.name}</span>
-                    ${branch.name === this.currentRepo?.default_branch ? '<span class="badge badge-success">default</span>' : ''}
+            // Используем DocumentFragment для batch-вставки
+            const fragment = document.createDocumentFragment();
+            const template = document.createElement('template');
+            
+            template.innerHTML = branches.map(branch => `
+                <div class="branch-card ${branch.name === this.currentRepo?.default_branch ? 'default' : ''}">
+                    <div class="branch-info">
+                        <span class="branch-name">${branch.name}</span>
+                        ${branch.name === this.currentRepo?.default_branch ? '<span class="badge badge-success">default</span>' : ''}
+                    </div>
+                    <div class="branch-actions">
+                        <button class="btn btn-sm" onclick="githubManager.checkoutBranch('${branch.name}')">Checkout</button>
+                        ${branch.name !== this.currentRepo?.default_branch ? `<button class="btn btn-sm btn-danger" onclick="githubManager.confirmDeleteBranch('${branch.name}')">Delete</button>` : ''}
+                    </div>
                 </div>
-                <div class="branch-actions">
-                    <button class="btn btn-sm" onclick="githubManager.checkoutBranch('${branch.name}')">Checkout</button>
-                    ${branch.name !== this.currentRepo?.default_branch ? `<button class="btn btn-sm btn-danger" onclick="githubManager.confirmDeleteBranch('${branch.name}')">Delete</button>` : ''}
-                </div>
-            </div>
-        `).join('');
+            `).join('');
+            
+            fragment.appendChild(template.content);
+            container.innerHTML = '';
+            container.appendChild(fragment);
 
-        // Обновить select веток
-        const branchSelect = document.getElementById('branchSelect');
-        if (branchSelect) {
-            branchSelect.innerHTML = branches.map(b => `<option value="${b.name}">${b.name}</option>`).join('');
-        }
+            // Обновить select веток
+            const branchSelect = document.getElementById('branchSelect');
+            if (branchSelect) {
+                branchSelect.innerHTML = branches.map(b => `<option value="${b.name}">${b.name}</option>`).join('');
+            }
+        });
     }
 
     // Подтверждение удаления ветки

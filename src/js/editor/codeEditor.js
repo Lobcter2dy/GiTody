@@ -1,6 +1,14 @@
 /**
- * Code Editor Pro - полный редактор кода с подсветкой синтаксиса
+ * Code Editor Pro - оптимизированный редактор кода с подсветкой синтаксиса
+ * @module CodeEditor
  */
+
+const CONFIG = {
+    HIGHLIGHT_DEBOUNCE: 100,    // Дебаунс подсветки синтаксиса
+    LINE_NUMBERS_DEBOUNCE: 50,  // Дебаунс обновления номеров строк
+    MAX_HISTORY: 100,           // Максимум записей истории
+    TAB_SIZE: 4,                // Размер табуляции
+};
 
 class CodeEditor {
     constructor() {
@@ -10,82 +18,127 @@ class CodeEditor {
         this.historyStep = -1;
         this.syntaxRules = this.initSyntaxRules();
         
+        // Дебаунс таймеры
+        this._highlightTimer = null;
+        this._lineNumbersTimer = null;
+        this._historyTimer = null;
+        
+        // Кэш элементов DOM
+        this._elements = {};
+        
         this.init();
     }
 
     init() {
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => this.initialize());
+            document.addEventListener('DOMContentLoaded', () => this.initialize(), { once: true });
         } else {
             this.initialize();
         }
     }
 
     initialize() {
+        this.cacheElements();
         this.setupEventListeners();
         this.updateLineNumbers();
     }
 
+    /**
+     * Кэширование DOM элементов для производительности
+     */
+    cacheElements() {
+        this._elements = {
+            mirror: document.getElementById('codeInput'),
+            display: document.getElementById('codeDisplay'),
+            lineNumbers: document.getElementById('lineNumbers'),
+            tabs: document.getElementById('editorTabs'),
+            lineCol: document.getElementById('editorLineCol'),
+            charCount: document.getElementById('editorChars'),
+            lang: document.getElementById('editorLang'),
+            console: document.getElementById('consoleOutput'),
+            consolePanel: document.getElementById('consolePanel')
+        };
+    }
+
     setupEventListeners() {
-        const mirror = document.getElementById('codeInput');
+        const { mirror } = this._elements;
         if (!mirror) return;
 
-        mirror.addEventListener('input', () => this.onCodeChange());
-        mirror.addEventListener('scroll', () => this.syncScroll());
+        // Используем passive listeners где возможно
+        mirror.addEventListener('input', () => this.onCodeChange(), { passive: true });
+        mirror.addEventListener('scroll', () => this.syncScroll(), { passive: true });
         mirror.addEventListener('keydown', (e) => this.handleKeyboard(e));
-        mirror.addEventListener('keyup', () => this.updateCursorPosition());
-        mirror.addEventListener('click', () => this.updateCursorPosition());
+        mirror.addEventListener('keyup', () => this.updateCursorPosition(), { passive: true });
+        mirror.addEventListener('click', () => this.updateCursorPosition(), { passive: true });
     }
 
     initSyntaxRules() {
         return {
             javascript: {
-                keywords: ['function', 'const', 'let', 'var', 'if', 'else', 'for', 'while', 'return', 
+                keywords: new Set(['function', 'const', 'let', 'var', 'if', 'else', 'for', 'while', 'return', 
                            'class', 'new', 'this', 'true', 'false', 'null', 'undefined', 'async', 
                            'await', 'try', 'catch', 'throw', 'import', 'export', 'default', 'from',
                            'extends', 'static', 'get', 'set', 'typeof', 'instanceof', 'in', 'of',
                            'switch', 'case', 'break', 'continue', 'do', 'finally', 'debugger', 'delete',
-                           'void', 'with', 'yield', 'super'],
-                types: ['String', 'Number', 'Boolean', 'Array', 'Object', 'Promise', 'Map', 'Set'],
-                builtins: ['console', 'document', 'window', 'Math', 'Date', 'JSON', 'parseInt', 
-                          'parseFloat', 'setTimeout', 'setInterval', 'fetch', 'localStorage', 'sessionStorage']
+                           'void', 'with', 'yield', 'super']),
+                types: new Set(['String', 'Number', 'Boolean', 'Array', 'Object', 'Promise', 'Map', 'Set']),
+                builtins: new Set(['console', 'document', 'window', 'Math', 'Date', 'JSON', 'parseInt', 
+                          'parseFloat', 'setTimeout', 'setInterval', 'fetch', 'localStorage', 'sessionStorage'])
             },
-            json: { keywords: ['true', 'false', 'null'] },
-            html: { keywords: [] },
-            css: { keywords: [] },
+            json: { keywords: new Set(['true', 'false', 'null']) },
+            html: { keywords: new Set() },
+            css: { keywords: new Set() },
             python: {
-                keywords: ['def', 'class', 'if', 'elif', 'else', 'for', 'while', 'return', 'import',
+                keywords: new Set(['def', 'class', 'if', 'elif', 'else', 'for', 'while', 'return', 'import',
                           'from', 'as', 'try', 'except', 'finally', 'with', 'lambda', 'pass', 'break',
                           'continue', 'True', 'False', 'None', 'and', 'or', 'not', 'in', 'is', 'global',
-                          'nonlocal', 'assert', 'yield', 'raise', 'async', 'await', 'del']
+                          'nonlocal', 'assert', 'yield', 'raise', 'async', 'await', 'del'])
             }
         };
     }
 
     onCodeChange() {
-        const mirror = document.getElementById('codeInput');
+        const { mirror } = this._elements;
         if (!mirror) return;
 
         const content = mirror.value;
         
         if (this.currentFile) {
-            this.files.set(this.currentFile, { 
-                ...this.files.get(this.currentFile),
-                content: content,
-                modified: true
-            });
+            const fileData = this.files.get(this.currentFile);
+            if (fileData) {
+                fileData.content = content;
+                fileData.modified = true;
+            }
         }
 
-        this.highlightCode();
-        this.updateLineNumbers();
+        // Дебаунс подсветки синтаксиса
+        clearTimeout(this._highlightTimer);
+        this._highlightTimer = setTimeout(() => {
+            requestAnimationFrame(() => this.highlightCode());
+        }, CONFIG.HIGHLIGHT_DEBOUNCE);
+
+        // Дебаунс номеров строк
+        clearTimeout(this._lineNumbersTimer);
+        this._lineNumbersTimer = setTimeout(() => {
+            this.updateLineNumbers();
+        }, CONFIG.LINE_NUMBERS_DEBOUNCE);
+
         this.updateCursorPosition();
 
-        // История
-        if (this.history.length === 0 || this.history[this.history.length - 1] !== content) {
+        // Дебаунс истории
+        clearTimeout(this._historyTimer);
+        this._historyTimer = setTimeout(() => {
+            this.addToHistory(content);
+        }, 300);
+    }
+
+    addToHistory(content) {
+        if (this.history.length === 0 || this.history[this.historyStep] !== content) {
             this.history.splice(this.historyStep + 1);
             this.history.push(content);
             this.historyStep++;
-            if (this.history.length > 100) {
+            
+            if (this.history.length > CONFIG.MAX_HISTORY) {
                 this.history.shift();
                 this.historyStep--;
             }
@@ -93,13 +146,18 @@ class CodeEditor {
     }
 
     highlightCode() {
-        const mirror = document.getElementById('codeInput');
-        const display = document.getElementById('codeDisplay');
+        const { mirror, display } = this._elements;
         if (!mirror || !display) return;
 
         const content = mirror.value;
-        const language = this.detectLanguage(this.currentFile || 'untitled.js');
         
+        // Для больших файлов пропускаем подсветку
+        if (content.length > 50000) {
+            display.textContent = content;
+            return;
+        }
+
+        const language = this.detectLanguage(this.currentFile || 'untitled.js');
         let highlighted = this.escapeHtml(content);
 
         switch(language) {
@@ -125,7 +183,7 @@ class CodeEditor {
     }
 
     highlightJavaScript(code) {
-        const rules = this.syntaxRules.javascript;
+        const { keywords } = this.syntaxRules.javascript;
 
         // Комментарии
         code = code.replace(/\/\/.*$/gm, '<span class="comment">$&</span>');
@@ -139,10 +197,12 @@ class CodeEditor {
         // Числа
         code = code.replace(/\b(\d+\.?\d*)\b/g, '<span class="number">$1</span>');
 
-        // Ключевые слова
-        rules.keywords.forEach(keyword => {
-            const regex = new RegExp(`\\b${keyword}\\b`, 'g');
-            code = code.replace(regex, `<span class="keyword">${keyword}</span>`);
+        // Ключевые слова - используем Set для O(1) lookup
+        code = code.replace(/\b([a-z]+)\b/gi, (match) => {
+            if (keywords.has(match)) {
+                return `<span class="keyword">${match}</span>`;
+            }
+            return match;
         });
 
         // Функции
@@ -163,7 +223,7 @@ class CodeEditor {
     }
 
     highlightPython(code) {
-        const rules = this.syntaxRules.python;
+        const { keywords } = this.syntaxRules.python;
         
         code = code.replace(/#.*$/gm, '<span class="comment">$&</span>');
         code = code.replace(/"""[\s\S]*?"""/g, '<span class="string">$&</span>');
@@ -172,9 +232,11 @@ class CodeEditor {
         code = code.replace(/'([^'\\]|\\.)*'/g, '<span class="string">$&</span>');
         code = code.replace(/\b(\d+\.?\d*)\b/g, '<span class="number">$1</span>');
         
-        rules.keywords.forEach(keyword => {
-            const regex = new RegExp(`\\b${keyword}\\b`, 'g');
-            code = code.replace(regex, `<span class="keyword">${keyword}</span>`);
+        code = code.replace(/\b([a-zA-Z_]+)\b/g, (match) => {
+            if (keywords.has(match)) {
+                return `<span class="keyword">${match}</span>`;
+            }
+            return match;
         });
 
         code = code.replace(/(\w+)\s*\(/g, '<span class="function">$1</span>(');
@@ -202,32 +264,46 @@ class CodeEditor {
     }
 
     syncScroll() {
-        const mirror = document.getElementById('codeInput');
-        const display = document.getElementById('codeDisplay');
-        const lineNumbers = document.getElementById('lineNumbers');
-        
-        if (display) {
-            display.scrollLeft = mirror.scrollLeft;
-            display.scrollTop = mirror.scrollTop;
-        }
-        if (lineNumbers) {
-            lineNumbers.scrollTop = mirror.scrollTop;
-        }
+        const { mirror, display, lineNumbers } = this._elements;
+        if (!mirror) return;
+
+        // Используем requestAnimationFrame для плавной синхронизации
+        requestAnimationFrame(() => {
+            if (display) {
+                display.scrollLeft = mirror.scrollLeft;
+                display.scrollTop = mirror.scrollTop;
+            }
+            if (lineNumbers) {
+                lineNumbers.scrollTop = mirror.scrollTop;
+            }
+        });
     }
 
     updateLineNumbers() {
-        const mirror = document.getElementById('codeInput');
-        const lineNumbers = document.getElementById('lineNumbers');
+        const { mirror, lineNumbers } = this._elements;
         if (!mirror || !lineNumbers) return;
 
         const lines = mirror.value.split('\n').length;
-        lineNumbers.innerHTML = Array.from({ length: lines }, (_, i) => 
-            `<div class="line-num">${i + 1}</div>`
-        ).join('');
+        const currentLines = lineNumbers.childElementCount;
+
+        // Оптимизация: только добавляем/удаляем нужные строки
+        if (lines === currentLines) return;
+
+        // Используем DocumentFragment для batch insert
+        const fragment = document.createDocumentFragment();
+        for (let i = 1; i <= lines; i++) {
+            const div = document.createElement('div');
+            div.className = 'line-num';
+            div.textContent = i;
+            fragment.appendChild(div);
+        }
+
+        lineNumbers.innerHTML = '';
+        lineNumbers.appendChild(fragment);
     }
 
     updateCursorPosition() {
-        const mirror = document.getElementById('codeInput');
+        const { mirror, lineCol, charCount } = this._elements;
         if (!mirror) return;
 
         const text = mirror.value.substring(0, mirror.selectionStart);
@@ -235,15 +311,12 @@ class CodeEditor {
         const col = text.split('\n').pop().length + 1;
         const chars = mirror.value.length;
 
-        const lineCol = document.getElementById('editorLineCol');
-        const charCount = document.getElementById('editorChars');
-        
         if (lineCol) lineCol.textContent = `Строка ${line}, Колонка ${col}`;
         if (charCount) charCount.textContent = `${chars} символов`;
     }
 
     handleKeyboard(e) {
-        const mirror = document.getElementById('codeInput');
+        const { mirror } = this._elements;
         if (!mirror) return;
 
         // Tab
@@ -251,8 +324,9 @@ class CodeEditor {
             e.preventDefault();
             const start = mirror.selectionStart;
             const end = mirror.selectionEnd;
-            mirror.value = mirror.value.substring(0, start) + '    ' + mirror.value.substring(end);
-            mirror.selectionStart = mirror.selectionEnd = start + 4;
+            const spaces = ' '.repeat(CONFIG.TAB_SIZE);
+            mirror.value = mirror.value.substring(0, start) + spaces + mirror.value.substring(end);
+            mirror.selectionStart = mirror.selectionEnd = start + CONFIG.TAB_SIZE;
             this.onCodeChange();
         }
 
@@ -268,8 +342,8 @@ class CodeEditor {
             this.undo();
         }
 
-        // Ctrl+Shift+Z
-        if ((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey) {
+        // Ctrl+Shift+Z / Ctrl+Y
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
             e.preventDefault();
             this.redo();
         }
@@ -301,7 +375,7 @@ class CodeEditor {
 
     loadFile(filename, content = null) {
         this.currentFile = filename;
-        const mirror = document.getElementById('codeInput');
+        const { mirror, lang } = this._elements;
         if (!mirror) return;
 
         if (content !== null) {
@@ -320,7 +394,6 @@ class CodeEditor {
         this.history = [mirror.value];
         this.historyStep = 0;
 
-        const lang = document.getElementById('editorLang');
         if (lang) lang.textContent = this.getLanguageLabel(filename);
         
         this.renderTabs();
@@ -329,14 +402,13 @@ class CodeEditor {
     saveFile() {
         if (!this.currentFile) return;
         
-        const mirror = document.getElementById('codeInput');
+        const { mirror } = this._elements;
         if (!mirror) return;
         
         const fileData = this.files.get(this.currentFile);
         if (fileData) {
             fileData.content = mirror.value;
             fileData.modified = false;
-            this.files.set(this.currentFile, fileData);
         }
 
         this.log(`✓ Сохранено: ${this.currentFile}`, 'success');
@@ -352,7 +424,7 @@ class CodeEditor {
                 this.loadFile(remaining[0]);
             } else {
                 this.currentFile = null;
-                const mirror = document.getElementById('codeInput');
+                const { mirror } = this._elements;
                 if (mirror) mirror.value = '';
                 this.highlightCode();
                 this.updateLineNumbers();
@@ -363,21 +435,32 @@ class CodeEditor {
     }
 
     renderTabs() {
-        const container = document.getElementById('editorTabs');
-        if (!container) return;
+        const { tabs } = this._elements;
+        if (!tabs) return;
 
-        container.innerHTML = '';
+        // Используем DocumentFragment
+        const fragment = document.createDocumentFragment();
         
         this.files.forEach((data, filename) => {
             const tab = document.createElement('div');
             tab.className = `editor-tab${filename === this.currentFile ? ' active' : ''}${data.modified ? ' modified' : ''}`;
             tab.innerHTML = `
                 <span class="tab-name">${filename}</span>
-                <span class="tab-close" onclick="event.stopPropagation(); codeEditor.closeFile('${filename}')">×</span>
+                <span class="tab-close" data-file="${filename}">×</span>
             `;
-            tab.addEventListener('click', () => this.loadFile(filename));
-            container.appendChild(tab);
+            tab.addEventListener('click', (e) => {
+                if (e.target.classList.contains('tab-close')) {
+                    e.stopPropagation();
+                    this.closeFile(e.target.dataset.file);
+                } else {
+                    this.loadFile(filename);
+                }
+            });
+            fragment.appendChild(tab);
         });
+
+        tabs.innerHTML = '';
+        tabs.appendChild(fragment);
     }
 
     // === История ===
@@ -385,7 +468,7 @@ class CodeEditor {
     undo() {
         if (this.historyStep > 0) {
             this.historyStep--;
-            const mirror = document.getElementById('codeInput');
+            const { mirror } = this._elements;
             if (mirror) {
                 mirror.value = this.history[this.historyStep];
                 this.highlightCode();
@@ -397,7 +480,7 @@ class CodeEditor {
     redo() {
         if (this.historyStep < this.history.length - 1) {
             this.historyStep++;
-            const mirror = document.getElementById('codeInput');
+            const { mirror } = this._elements;
             if (mirror) {
                 mirror.value = this.history[this.historyStep];
                 this.highlightCode();
@@ -409,7 +492,7 @@ class CodeEditor {
     // === Форматирование ===
 
     formatCode() {
-        const mirror = document.getElementById('codeInput');
+        const { mirror } = this._elements;
         if (!mirror) return;
 
         try {
@@ -418,11 +501,6 @@ class CodeEditor {
 
             if (lang === 'json') {
                 code = JSON.stringify(JSON.parse(code), null, 2);
-            } else if (lang === 'javascript') {
-                // Простое форматирование
-                code = code.replace(/\{/g, ' {\n')
-                          .replace(/\}/g, '\n}\n')
-                          .replace(/;(?!\s*\n)/g, ';\n');
             }
 
             mirror.value = code;
@@ -439,7 +517,7 @@ class CodeEditor {
         const search = prompt('Поиск:');
         if (!search) return;
 
-        const mirror = document.getElementById('codeInput');
+        const { mirror } = this._elements;
         if (!mirror) return;
 
         const content = mirror.value;
@@ -449,7 +527,6 @@ class CodeEditor {
         if (matches) {
             this.log(`Найдено: ${matches.length} совпадений`, 'info');
             
-            // Выделить первое
             const index = content.toLowerCase().indexOf(search.toLowerCase());
             if (index !== -1) {
                 mirror.focus();
@@ -463,7 +540,7 @@ class CodeEditor {
     // === Запуск ===
 
     runCode() {
-        const mirror = document.getElementById('codeInput');
+        const { mirror } = this._elements;
         if (!mirror) return;
 
         this.openConsole();
@@ -473,21 +550,27 @@ class CodeEditor {
         const originalError = console.error;
         const originalWarn = console.warn;
 
+        const self = this;
+
         console.log = (...args) => {
-            this.log(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'info');
-            originalLog(...args);
+            self.log(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'info');
+            originalLog.apply(console, args);
         };
         console.error = (...args) => {
-            this.log(args.join(' '), 'error');
-            originalError(...args);
+            self.log(args.join(' '), 'error');
+            originalError.apply(console, args);
         };
         console.warn = (...args) => {
-            this.log(args.join(' '), 'warn');
-            originalWarn(...args);
+            self.log(args.join(' '), 'warn');
+            originalWarn.apply(console, args);
         };
 
         try {
-            eval(mirror.value);
+            // Безопасное выполнение в try-catch
+            const result = new Function(mirror.value)();
+            if (result !== undefined) {
+                this.log('← ' + String(result), 'success');
+            }
             this.log('✓ Выполнено успешно', 'success');
         } catch (e) {
             this.log('✗ Ошибка: ' + e.message, 'error');
@@ -501,26 +584,29 @@ class CodeEditor {
     // === Консоль ===
 
     toggleConsole() {
-        const panel = document.getElementById('consolePanel');
-        if (panel) panel.classList.toggle('collapsed');
+        const { consolePanel } = this._elements;
+        if (consolePanel) consolePanel.classList.toggle('collapsed');
     }
 
     openConsole() {
-        const panel = document.getElementById('consolePanel');
-        if (panel) panel.classList.remove('collapsed');
+        const { consolePanel } = this._elements;
+        if (consolePanel) consolePanel.classList.remove('collapsed');
     }
 
     clearConsole() {
-        const output = document.getElementById('consoleOutput');
-        if (output) output.innerHTML = '';
+        const { console: consoleEl } = this._elements;
+        if (consoleEl) consoleEl.innerHTML = '';
     }
 
     log(message, type = 'info') {
-        const output = document.getElementById('consoleOutput');
-        if (!output) return;
+        const { console: consoleEl } = this._elements;
+        if (!consoleEl) return;
         
-        output.innerHTML += `<div class="console-log ${type}">${this.escapeHtml(message)}</div>`;
-        output.scrollTop = output.scrollHeight;
+        const div = document.createElement('div');
+        div.className = `console-log ${type}`;
+        div.textContent = message;
+        consoleEl.appendChild(div);
+        consoleEl.scrollTop = consoleEl.scrollHeight;
     }
 
     // === Утилиты ===
@@ -553,8 +639,16 @@ class CodeEditor {
         };
         return labels[lang] || 'Текст';
     }
+
+    /**
+     * Очистка ресурсов
+     */
+    dispose() {
+        clearTimeout(this._highlightTimer);
+        clearTimeout(this._lineNumbersTimer);
+        clearTimeout(this._historyTimer);
+    }
 }
 
 export const codeEditor = new CodeEditor();
 window.codeEditor = codeEditor;
-

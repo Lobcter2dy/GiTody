@@ -516,14 +516,16 @@ class SpeechToTextEditor {
     }
 
     startTimer() {
+        // Увеличен интервал с 100ms до 1000ms для производительности
         this.timerInterval = setInterval(() => {
             if (this.isListening) {
                 const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
                 const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
                 const secs = String(elapsed % 60).padStart(2, '0');
-                document.getElementById('duration').textContent = `${mins}:${secs}`;
+                const durationEl = document.getElementById('duration');
+                if (durationEl) durationEl.textContent = `${mins}:${secs}`;
             }
-        }, 100);
+        }, 1000);
     }
 
     updateStats() {
