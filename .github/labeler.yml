@@ -1,0 +1,19 @@
+'type: documentation':
+  - '**/*.md'
+  - 'docs/**/*'
+
+'dependencies':
+  - 'package.json'
+  - 'package-lock.json'
+
+'platform: electron':
+  - 'electron/**/*'
+
+'frontend':
+  - 'src/**/*.html'
+  - 'src/**/*.css'
+  - 'src/**/*.js'
+
+'build':
+  - 'vite.config.js'
+  - '.github/workflows/**'

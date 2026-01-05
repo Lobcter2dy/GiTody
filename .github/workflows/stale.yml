@@ -1,0 +1,27 @@
+name: Mark stale issues and PRs
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    
+    steps:
+    - uses: actions/stale@v9
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        stale-issue-message: 'Этот issue неактивен более 60 дней и будет закрыт через 7 дней, если не будет активности.'
+        stale-pr-message: 'Этот PR неактивен более 60 дней и будет закрыт через 7 дней, если не будет активности.'
+        close-issue-message: 'Закрыто из-за отсутствия активности.'
+        close-pr-message: 'Закрыто из-за отсутствия активности.'
+        days-before-stale: 60
+        days-before-close: 7
+        stale-issue-label: 'stale'
+        stale-pr-label: 'stale'
+        exempt-issue-labels: 'priority: critical,priority: high,status: in progress'
+        exempt-pr-labels: 'status: in progress,status: needs review'
