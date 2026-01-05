@@ -82,6 +82,9 @@ async function initApp() {
             if (savedRepo) {
                 await githubManager.selectRepo(savedRepo);
             }
+
+            // Рендерим профиль
+            if (githubAuth.renderProfile) githubAuth.renderProfile();
         }
         
         // 4. Инициализация модулей (БЕЗ дублирования)
