@@ -1,10 +1,11 @@
-const { app, BrowserWindow, ipcMain, session, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, session, shell, dialog } = require('electron');
 const path = require('path');
 const si = require('systeminformation');
 const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const { URL } = require('url');
+const { exec } = require('child_process');
 
 // Отключить sandbox для Linux
 app.commandLine.appendSwitch('no-sandbox');
@@ -142,6 +143,30 @@ function startOAuthCallbackServer() {
     });
     oauthCallbackServer.listen(47524, '127.0.0.1');
 }
+
+// Git & File System Operations
+ipcMain.handle('dialog-open-directory', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ['openDirectory']
+    });
+    return result.canceled ? null : result.filePaths[0];
+});
+
+ipcMain.handle('git-clone', async (event, { url, targetPath, token }) => {
+    return new Promise((resolve, reject) => {
+        // Вставляем токен в URL для авторизации
+        const authUrl = url.replace('https://', `https://x-access-token:${token}@`);
+        
+        exec(`git clone ${authUrl} "${targetPath}"`, (error, stdout, stderr) => {
+            if (error) {
+                console.error(`Git clone error: ${error.message}`);
+                reject(error.message);
+                return;
+            }
+            resolve(stdout || stderr);
+        });
+    });
+});
 
 ipcMain.on('open-external-url', (event, url) => shell.openExternal(url));
 
