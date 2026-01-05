@@ -225,14 +225,22 @@ function startOAuthCallbackServer() {
         if (url.pathname === '/callback') {
             const code = url.searchParams.get('code');
             const error = url.searchParams.get('error');
-            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            
             if (error) {
+                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
                 if (mainWindow) mainWindow.webContents.send('github-oauth-result', { type: 'error', error });
                 res.end('<h1 style="color:red">Ошибка авторизации</h1>');
             } else if (code) {
+                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
                 if (mainWindow) mainWindow.webContents.send('github-oauth-result', { type: 'success', code });
                 res.end('<h1 style="color:green">✓ Успешно! Можете закрыть окно.</h1><script>setTimeout(()=>window.close(),2000)</script>');
+            } else {
+                res.writeHead(400, { 'Content-Type': 'text/plain' });
+                res.end('Bad Request: Missing code or error parameter');
             }
+        } else {
+            res.writeHead(404, { 'Content-Type': 'text/plain' });
+            res.end('Not Found');
         }
     });
     oauthCallbackServer.listen(47524, '127.0.0.1');
