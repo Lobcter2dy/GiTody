@@ -145,6 +145,31 @@ function startOAuthCallbackServer() {
 }
 
 // Git & File System Operations
+// File System Operations
+ipcMain.handle('read-dir', async (event, dirPath) => {
+    try {
+        const dirents = await fs.promises.readdir(dirPath, { withFileTypes: true });
+        return dirents.map(dirent => ({
+            name: dirent.name,
+            type: dirent.isDirectory() ? 'dir' : 'file',
+            path: path.join(dirPath, dirent.name)
+        })).sort((a, b) => {
+            if (a.type === b.type) return a.name.localeCompare(b.name);
+            return a.type === 'dir' ? -1 : 1;
+        });
+    } catch (e) {
+        throw e.message;
+    }
+});
+
+ipcMain.handle('read-file', async (event, filePath) => {
+    try {
+        return await fs.promises.readFile(filePath, 'utf-8');
+    } catch (e) {
+        throw e.message;
+    }
+});
+
 ipcMain.handle('dialog-open-directory', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
         properties: ['openDirectory']

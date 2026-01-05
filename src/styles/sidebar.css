@@ -1,5 +1,25 @@
-/* Sidebar Styles */
+/* Special Folders */
+.special-folder > .tree-item-header {
+    background-color: #000000;
+    border: 1px solid #444c56;
+    margin: 2px 0;
+    border-radius: 4px;
+}
 
+.special-folder > .tree-item-header:hover {
+    background-color: #0d1117;
+    border-color: #8b949e;
+}
+
+.special-folder .tree-name {
+    color: #8b949e;
+}
+
+.special-folder .folder-icon {
+    color: #8b949e !important;
+}
+
+/* Sidebar Styles */
 .sidebar {
     width: 280px;
     min-width: 280px;

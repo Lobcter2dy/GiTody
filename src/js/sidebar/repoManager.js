@@ -23,6 +23,7 @@ export class RepoManager {
     initialize() {
         this.repos = [];
         this.repoFiles = {};
+        this.specialFolders = new Set(['node_modules', '.git', '.idea', '.vscode', 'dist', 'build', 'coverage']);
         this.renderSidebar();
     }
 
@@ -43,6 +44,9 @@ export class RepoManager {
             <div class="sidebar-actions">
                 <button class="sidebar-icon-btn" onclick="repoManager.createRepo()" title="Создать репозиторий">
                     ${icons.plus}
+                </button>
+                <button class="sidebar-icon-btn" onclick="repoManager.openLocalRepo()" title="Открыть локальную папку">
+                    ${icons.folderOpen}
                 </button>
                 <button class="sidebar-icon-btn" onclick="repoManager.importRepo()" title="Загрузить репозиторий">
                     ${icons.upload}
@@ -65,6 +69,76 @@ export class RepoManager {
 
         // Восстановить цвета папок
         this.applyFolderColors();
+    }
+
+    async openLocalRepo() {
+        try {
+            const path = await window.ipcRenderer.invoke('dialog-open-directory');
+            if (!path) return;
+
+            const name = path.split(/[\\/]/).pop();
+            const id = 'local-' + Date.now();
+            
+            const newRepo = {
+                id,
+                name,
+                path, // Local path
+                isLocal: true,
+                stars: 0,
+                language: 'Local',
+                isPrivate: true
+            };
+
+            this.repos.unshift(newRepo);
+            this.renderSidebar();
+            
+            // Load root files
+            await this.loadLocalDir(id, path);
+            this.selectRepo(id);
+            
+        } catch (e) {
+            alert('Error opening folder: ' + e);
+        }
+    }
+
+    async loadLocalDir(repoId, dirPath) {
+        try {
+            const items = await window.ipcRenderer.invoke('read-dir', dirPath);
+            this.repoFiles[repoId] = items.map(item => ({
+                ...item,
+                path: item.path
+            }));
+            this.renderFileTree(repoId);
+        } catch (e) {
+            console.error('Failed to load dir:', e);
+        }
+    }
+
+    async loadLocalChildren(dirPath) {
+        try {
+            const children = await window.ipcRenderer.invoke('read-dir', dirPath);
+            
+            const updateTree = (nodes) => {
+                for (let node of nodes) {
+                    if (node.path === dirPath) {
+                        node.children = children.map(c => ({...c, path: c.path}));
+                        return true;
+                    }
+                    if (node.children) {
+                        if (updateTree(node.children)) return true;
+                    }
+                }
+                return false;
+            };
+
+            const rootItems = this.repoFiles[this.activeRepo];
+            if (updateTree(rootItems)) {
+                this.renderFileTree(this.activeRepo);
+            }
+
+        } catch (e) {
+            console.error(e);
+        }
     }
 
     renderReposList() {
