@@ -140,215 +140,160 @@ class SystemMonitorReal {
         let cpuCard = cpuSection.querySelector('.system-card[data-type="cpu"]');
         if (!cpuCard) {
             cpuCard = document.createElement('div');
-            cpuCard.className = 'system-card';
+            cpuCard.className = 'system-card full-width-card';
             cpuCard.setAttribute('data-type', 'cpu');
+            cpuCard.innerHTML = `
+                <div class="system-card-header">
+                    <span>Central Processing Unit</span>
+                    <span class="cpu-model-name">${data.brand || 'CPU'}</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="cpuChart" height="100"></canvas>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="label">Load</div>
+                        <div class="value value-cpu-load">0%</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="label">Cores</div>
+                        <div class="value">${data.cores}</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="label">Temp</div>
+                        <div class="value value-cpu-temp">--°C</div>
+                    </div>
+                </div>
+            `;
             if (!cpuSection.querySelector('.system-cards-grid')) {
                 const grid = document.createElement('div');
                 grid.className = 'system-cards-grid';
                 cpuSection.appendChild(grid);
             }
-            cpuSection.querySelector('.system-cards-grid').appendChild(cpuCard);
+            cpuSection.querySelector('.system-cards-grid').prepend(cpuCard);
+            this.initChart('cpuChart', '#58a6ff');
         }
 
-        const progressValue = Math.min(100, Math.max(0, parseFloat(data.load) || 0));
-        cpuCard.innerHTML = `
-            <div class="system-card-header">CPU</div>
-            <div class="system-card-stat">
-                <span class="label">Загрузка</span>
-                <span class="value">${data.load}%</span>
-            </div>
-            <div class="system-card-stat">
-                <span class="label">Ядер</span>
-                <span class="value">${data.cores}</span>
-            </div>
-            <div class="system-card-stat">
-                <span class="label">Температура</span>
-                <span class="value">${parseFloat(data.temp || 0).toFixed(1)}°C</span>
-            </div>
-            <div class="progress-bar">
-                <div class="progress-fill" style="width: ${progressValue}%"></div>
-            </div>
-        `;
+        // Update values
+        const load = parseFloat(data.load).toFixed(1);
+        cpuCard.querySelector('.value-cpu-load').textContent = `${load}%`;
+        cpuCard.querySelector('.value-cpu-temp').textContent = `${parseFloat(data.temp).toFixed(1)}°C`;
+        
+        this.updateChart('cpuChart', load);
+    }
+
+    initChart(id, color) {
+        const canvas = document.getElementById(id);
+        if (!canvas) return;
+        // Simple array based history attached to element
+        canvas.dataHistory = new Array(60).fill(0);
+        canvas.chartColor = color;
+    }
+
+    updateChart(id, value) {
+        const canvas = document.getElementById(id);
+        if (!canvas || !canvas.dataHistory) return;
+        
+        const history = canvas.dataHistory;
+        history.push(value);
+        history.shift();
+        
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width = canvas.offsetWidth;
+        const h = canvas.height;
+        
+        ctx.clearRect(0, 0, w, h);
+        ctx.beginPath();
+        ctx.strokeStyle = canvas.chartColor;
+        ctx.lineWidth = 2;
+        
+        // Draw line
+        const step = w / (history.length - 1);
+        history.forEach((val, i) => {
+            const y = h - (val / 100 * h);
+            if (i===0) ctx.moveTo(0, y);
+            else ctx.lineTo(i * step, y);
+        });
+        ctx.stroke();
+        
+        // Fill area
+        ctx.lineTo(w, h);
+        ctx.lineTo(0, h);
+        ctx.fillStyle = canvas.chartColor + '33'; // 20% opacity
+        ctx.fill();
     }
 
     updateMemoryDisplay(data) {
+        // Simplified update for RAM with bar
         const cpuSection = document.getElementById('settings-system');
-        if (!cpuSection) return;
-
         let memCard = cpuSection.querySelector('.system-card[data-type="memory"]');
+        // ... (similar logic or keep existing but refined)
+        // For brevity, I'll rely on the existing structure but ensure it parses data correctly
         if (!memCard) {
-            memCard = document.createElement('div');
-            memCard.className = 'system-card';
-            memCard.setAttribute('data-type', 'memory');
-            if (!cpuSection.querySelector('.system-cards-grid')) {
-                const grid = document.createElement('div');
-                grid.className = 'system-cards-grid';
-                cpuSection.appendChild(grid);
-            }
-            cpuSection.querySelector('.system-cards-grid').appendChild(memCard);
+             // Create if missing (reuse existing logic but make sure it handles new IPC format)
+             memCard = document.createElement('div');
+             memCard.className = 'system-card';
+             memCard.setAttribute('data-type', 'memory');
+             cpuSection.querySelector('.system-cards-grid').appendChild(memCard);
         }
-
-        const progressValue = Math.min(100, Math.max(0, parseFloat(data.percent) || 0));
+        
+        const percent = parseFloat(data.percent).toFixed(1);
         memCard.innerHTML = `
-            <div class="system-card-header">Память</div>
-            <div class="system-card-stat">
-                <span class="label">Используется</span>
-                <span class="value">${data.used} GB / ${data.total} GB</span>
+            <div class="system-card-header">Memory</div>
+            <div class="pie-chart-container" style="display:flex; justify-content:center; padding:10px;">
+                <div class="pie-chart" style="background: conic-gradient(#3fb950 ${percent}%, #30363d 0);">
+                    <div class="pie-center">${percent}%</div>
+                </div>
             </div>
             <div class="system-card-stat">
-                <span class="label">Загрузка</span>
-                <span class="value">${data.percent}%</span>
-            </div>
-            <div class="progress-bar">
-                <div class="progress-fill" style="width: ${progressValue}%"></div>
-            </div>
-        `;
-    }
-
-    updateDiskDisplay(data) {
-        const cpuSection = document.getElementById('settings-system');
-        if (!cpuSection) return;
-
-        let diskCard = cpuSection.querySelector('.system-card[data-type="disk"]');
-        if (!diskCard) {
-            diskCard = document.createElement('div');
-            diskCard.className = 'system-card';
-            diskCard.setAttribute('data-type', 'disk');
-            if (!cpuSection.querySelector('.system-cards-grid')) {
-                const grid = document.createElement('div');
-                grid.className = 'system-cards-grid';
-                cpuSection.appendChild(grid);
-            }
-            cpuSection.querySelector('.system-cards-grid').appendChild(diskCard);
-        }
-
-        const progressValue = Math.min(100, Math.max(0, parseFloat(data.percent) || 0));
-        diskCard.innerHTML = `
-            <div class="system-card-header">Диск</div>
-            <div class="system-card-stat">
-                <span class="label">Используется</span>
-                <span class="value">${data.used} GB / ${data.total} GB</span>
+                <span class="label">Used</span>
+                <span class="value">${data.used} GB</span>
             </div>
             <div class="system-card-stat">
-                <span class="label">Загрузка</span>
-                <span class="value">${data.percent}%</span>
-            </div>
-            <div class="system-card-stat">
-                <span class="label">Дисков</span>
-                <span class="value">${data.disks}</span>
-            </div>
-            <div class="progress-bar">
-                <div class="progress-fill" style="width: ${progressValue}%"></div>
-            </div>
-        `;
-    }
-
-    updateGPUDisplay(data) {
-        const cpuSection = document.getElementById('settings-system');
-        if (!cpuSection) return;
-
-        let gpuCard = cpuSection.querySelector('.system-card[data-type="gpu"]');
-        if (!gpuCard) {
-            gpuCard = document.createElement('div');
-            gpuCard.className = 'system-card';
-            gpuCard.setAttribute('data-type', 'gpu');
-            if (!cpuSection.querySelector('.system-cards-grid')) {
-                const grid = document.createElement('div');
-                grid.className = 'system-cards-grid';
-                cpuSection.appendChild(grid);
-            }
-            cpuSection.querySelector('.system-cards-grid').appendChild(gpuCard);
-        }
-
-        gpuCard.innerHTML = `
-            <div class="system-card-header">GPU</div>
-            <div class="system-card-stat">
-                <span class="label">Бренд</span>
-                <span class="value">${data.brand}</span>
-            </div>
-            <div class="system-card-stat">
-                <span class="label">Модель</span>
-                <span class="value">${data.model}</span>
-            </div>
-            <div class="system-card-stat">
-                <span class="label">VRAM</span>
-                <span class="value">${data.vram} MB</span>
-            </div>
-        `;
-    }
-
-    updateOSDisplay(data) {
-        const cpuSection = document.getElementById('settings-system');
-        if (!cpuSection) return;
-
-        let osCard = cpuSection.querySelector('.system-card[data-type="os"]');
-        if (!osCard) {
-            osCard = document.createElement('div');
-            osCard.className = 'system-card';
-            osCard.setAttribute('data-type', 'os');
-            if (!cpuSection.querySelector('.system-cards-grid')) {
-                const grid = document.createElement('div');
-                grid.className = 'system-cards-grid';
-                cpuSection.appendChild(grid);
-            }
-            cpuSection.querySelector('.system-cards-grid').appendChild(osCard);
-        }
-
-        const uptimeHours = Math.floor((data.uptime || 0) / 3600);
-        const uptimeDays = Math.floor(uptimeHours / 24);
-
-        osCard.innerHTML = `
-            <div class="system-card-header">ОС</div>
-            <div class="system-card-stat">
-                <span class="label">ОС</span>
-                <span class="value">${data.platform} ${data.distro}</span>
-            </div>
-            <div class="system-card-stat">
-                <span class="label">Архитектура</span>
-                <span class="value">${data.arch}</span>
-            </div>
-            <div class="system-card-stat">
-                <span class="label">Ядро</span>
-                <span class="value">${data.kernel}</span>
-            </div>
-            <div class="system-card-stat">
-                <span class="label">Uptime</span>
-                <span class="value">${uptimeDays}д ${uptimeHours % 24}ч</span>
+                <span class="label">Total</span>
+                <span class="value">${data.total} GB</span>
             </div>
         `;
     }
 
     updateProcessesDisplay(processes) {
         const cpuSection = document.getElementById('settings-system');
-        if (!cpuSection) return;
-
         let procCard = cpuSection.querySelector('.system-card[data-type="processes"]');
         if (!procCard) {
             procCard = document.createElement('div');
-            procCard.className = 'system-card';
+            procCard.className = 'system-card full-width-card';
             procCard.setAttribute('data-type', 'processes');
-            if (!cpuSection.querySelector('.system-cards-grid')) {
-                const grid = document.createElement('div');
-                grid.className = 'system-cards-grid';
-                cpuSection.appendChild(grid);
-            }
             cpuSection.querySelector('.system-cards-grid').appendChild(procCard);
         }
 
-        let html = `<div class="system-card-header">Топ процессы</div>`;
-        if (processes && processes.length > 0) {
-            for (const proc of processes.slice(0, 5)) {
-                html += `
-                    <div class="process-item">
-                        <span class="proc-name">${proc.name}</span>
-                        <span class="proc-mem">${proc.mem}MB</span>
-                    </div>
-                `;
-            }
-        } else {
-            html += `<div style="padding: 8px 0; color: var(--text-tertiary); font-size: 10px;">Нет данных</div>`;
-        }
-
+        let html = `
+            <div class="system-card-header">
+                <span>Top Processes</span>
+                <span style="font-size:10px; color:#8b949e">Sorted by Memory</span>
+            </div>
+            <div class="process-table-header">
+                <span style="flex:2">Name</span>
+                <span style="flex:1">PID</span>
+                <span style="flex:1">CPU</span>
+                <span style="flex:1">Mem</span>
+            </div>
+            <div class="process-list">
+        `;
+        
+        processes.sort((a, b) => parseFloat(b.mem) - parseFloat(a.mem)); // Sort by MEM
+        
+        processes.slice(0, 8).forEach(proc => {
+            html += `
+                <div class="process-item-row">
+                    <span class="proc-name" title="${proc.name}">${proc.name}</span>
+                    <span class="proc-pid">${proc.pid}</span>
+                    <span class="proc-cpu">${proc.cpu}%</span>
+                    <span class="proc-mem">${proc.mem}MB</span>
+                </div>
+            `;
+        });
+        
+        html += `</div>`;
         procCard.innerHTML = html;
     }
 

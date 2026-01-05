@@ -31,6 +31,7 @@ import { diskManager } from './features/diskManager.js';
 import { speechManager } from './features/speechManager.js';
 import { aiManager } from './features/aiManager.js';
 import { storageManager } from './features/storageManager.js';
+import { networkManager } from './features/networkManager.js';
 
 // === Global Access ===
 window.session = session;
@@ -50,6 +51,7 @@ window.diskManager = diskManager;
 window.speechManager = speechManager;
 window.aiManager = aiManager;
 window.storageManager = storageManager;
+window.networkManager = networkManager;
 
 // === Modal Shortcuts ===
 window.showModal = (type) => modalManager.show(type);
@@ -94,6 +96,7 @@ async function initApp() {
         speechManager.init();
         aiManager.init();
         storageManager.init();
+        networkManager.init();
         
         console.log('[App] Ready');
     } catch (e) {

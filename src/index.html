@@ -220,7 +220,54 @@
             <!-- Other Tabs Placeholders -->
             <div id="dashboard" class="tab-content" style="display:none; padding:20px;"><h2>Dashboard</h2></div>
             <div id="chat" class="tab-content" style="display:none; padding:20px;"><h2>AI Chat</h2></div>
-            <div id="settings" class="tab-content" style="display:none; padding:20px;"><h2>Settings</h2></div>
+            <div id="network" class="tab-content" style="display:none; height:100%; overflow-y:auto; padding:20px;">
+                <div class="network-dashboard">
+                    <div class="network-header">
+                        <h2>Network Monitor & VPN</h2>
+                        <div class="net-speeds">
+                            <div class="speed-box down">↓ <span id="net-download">0 KB/s</span></div>
+                            <div class="speed-box up">↑ <span id="net-upload">0 KB/s</span></div>
+                        </div>
+                    </div>
+                    
+                    <div class="network-grid">
+                        <!-- Traffic Graph -->
+                        <div class="card net-card full">
+                            <h3>Real-time Traffic</h3>
+                            <canvas id="network-graph-canvas" style="width:100%; height:200px;"></canvas>
+                        </div>
+
+                        <!-- Interfaces -->
+                        <div class="card net-card">
+                            <h3>Interfaces</h3>
+                            <div id="net-interfaces" class="net-list"></div>
+                        </div>
+
+                        <!-- VPN Manager -->
+                        <div class="card net-card">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <h3>VPN Connections</h3>
+                                <button class="btn btn-sm btn-primary" onclick="networkManager.addNewVpn()">+ Add</button>
+                            </div>
+                            <div id="vpn-list" class="net-list"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="settings" class="tab-content" style="display:none; padding:20px;">
+                <h2>System & Settings</h2>
+                <div class="settings-container">
+                    <div class="settings-sidebar">
+                        <button class="settings-icon-btn active" data-section="system">💻 System</button>
+                        <button class="settings-icon-btn" data-section="network" onclick="navRing.setActiveTab('network')">🌐 Network</button>
+                    </div>
+                    <div class="settings-content">
+                        <div id="settings-system" class="settings-section active">
+                            <!-- System Monitor Cards injected here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
 
         </main>
     </div>
@@ -231,18 +278,34 @@
         <button class="nav-arc-item active" data-tab="github" data-index="1" title="GitHub">🐱</button>
         <button class="nav-arc-item" data-tab="chat" data-index="2" title="AI Chat">🤖</button>
         <button class="nav-arc-item" data-tab="editor" data-index="3" title="Code Editor">📝</button>
-        <button class="nav-arc-item" data-tab="settings" data-index="4" title="Settings">⚙️</button>
+        <button class="nav-arc-item" data-tab="network" data-index="4" title="Network & VPN">🌐</button>
+        <button class="nav-arc-item" data-tab="settings" data-index="5" title="System">💻</button>
     </div>
 
     <style>
         .tab-content.active { display: flex !important; }
-        .editor-tabs { display: flex; background: #0d1117; border-bottom: 1px solid #30363d; overflow-x: auto; }
-        .editor-tab { padding: 8px 12px; cursor: pointer; color: #8b949e; border-right: 1px solid #30363d; display: flex; align-items: center; gap: 8px; font-size: 12px; }
-        .editor-tab.active { background: #161b22; color: #c9d1d9; border-top: 2px solid #58a6ff; }
-        .editor-tab:hover { background: #161b22; }
-        .editor-tab-close { opacity: 0.5; font-size: 14px; }
-        .editor-tab-close:hover { opacity: 1; color: #f85149; }
-        .file-structure { overflow-y: auto; }
+        /* Network Styles */
+        .network-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+        .net-card.full { grid-column: span 2; }
+        .speed-box { padding: 5px 10px; border-radius: 4px; background: rgba(0,0,0,0.3); font-family: monospace; }
+        .speed-box.down { color: #3fb950; }
+        .speed-box.up { color: #58a6ff; }
+        .net-list { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .interface-item, .vpn-card { display: flex; align-items: center; gap: 10px; padding: 10px; background: #21262d; border-radius: 6px; }
+        .vpn-card.connected { border-left: 3px solid #3fb950; }
+        .vpn-actions { margin-left: auto; display: flex; gap: 5px; }
+        
+        /* System Cards Grid */
+        .system-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; }
+        .full-width-card { grid-column: 1 / -1; }
+        .stats-grid { display: flex; gap: 15px; margin-top: 10px; }
+        .stat-box { background: #0d1117; padding: 8px; border-radius: 4px; flex: 1; text-align: center; }
+        .pie-chart { width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto; }
+        .pie-center { width: 50px; height: 50px; background: #161b22; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+        .process-item-row { display: flex; padding: 4px 0; border-bottom: 1px solid #30363d; font-size: 12px; }
+        .process-item-row:last-child { border: none; }
+        .proc-name { flex: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c9d1d9; }
+        .proc-pid, .proc-cpu, .proc-mem { flex: 1; text-align: right; color: #8b949e; }
     </style>
 
     <script type="module" src="./js/main.js"></script>

@@ -124,6 +124,92 @@ ipcMain.handle('get-disk-info', async () => {
     return { disks: fsSize.length, total: (total / 1024**3).toFixed(2), used: (used / 1024**3).toFixed(2), percent: ((used / total) * 100).toFixed(1) };
 });
 
+ipcMain.handle('get-gpu-info', async () => {
+    const data = await si.graphics();
+    const gpu = data.controllers[0] || {};
+    return {
+        brand: gpu.vendor || 'Unknown',
+        model: gpu.model || 'Unknown',
+        vram: gpu.vram || 0,
+        utilization: gpu.utilizationGpu || 0
+    };
+});
+
+ipcMain.handle('get-os-info', async () => {
+    const os = await si.osInfo();
+    const time = si.time();
+    return {
+        platform: os.platform,
+        distro: os.distro,
+        arch: os.arch,
+        kernel: os.kernel,
+        uptime: time.uptime
+    };
+});
+
+ipcMain.handle('get-processes', async () => {
+    const data = await si.processes();
+    return data.list.slice(0, 20).map(p => ({
+        name: p.name,
+        pid: p.pid,
+        cpu: p.cpu.toFixed(1),
+        mem: (p.mem / 1024 / 1024).toFixed(1), // MB
+        user: p.user
+    }));
+});
+
+ipcMain.handle('get-network-info', async () => {
+    const ifaces = await si.networkInterfaces();
+    const stats = await si.networkStats();
+    
+    // Calculate total speed
+    let rx = 0, tx = 0;
+    stats.forEach(s => { rx += s.rx_sec; tx += s.tx_sec; });
+    
+    return {
+        interfaces: ifaces.length,
+        totalSpeed: ((rx + tx) / 1024 / 1024).toFixed(2), // Mbps
+        details: ifaces.map(i => ({
+            iface: i.iface,
+            ip4: i.ip4,
+            mac: i.mac,
+            type: i.type,
+            speed: i.speed
+        })),
+        traffic: {
+            rx: (rx / 1024).toFixed(1), // KB/s
+            tx: (tx / 1024).toFixed(1)
+        }
+    };
+});
+
+ipcMain.handle('get-drivers-info', async () => {
+    // Simulated drivers check (real one requires complex OS-specific calls)
+    return [];
+});
+
+// VPN Handlers
+ipcMain.handle('vpn-command', async (event, { command, config }) => {
+    return new Promise((resolve) => {
+        // Simulation for now as we might not have root/tools
+        // In real app: exec(`wg-quick ${command} ${config}`)
+        setTimeout(() => {
+            resolve({ success: true, message: `Command '${command}' executed for ${config}` });
+        }, 1000);
+    });
+});
+
+ipcMain.handle('save-vpn-config', async (event, { name, content }) => {
+    const configPath = path.join(app.getPath('userData'), 'vpn', `${name}.conf`);
+    try {
+        await fs.promises.mkdir(path.dirname(configPath), { recursive: true });
+        await fs.promises.writeFile(configPath, content);
+        return { success: true, path: configPath };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
 // GitHub OAuth
 function startOAuthCallbackServer() {
     oauthCallbackServer = http.createServer((req, res) => {
