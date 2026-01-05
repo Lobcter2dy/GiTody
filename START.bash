@@ -10,6 +10,11 @@ if [ ! -d "node_modules" ]; then
     npm install
 fi
 
+# Проверка системных утилит для VPN
+if ! command -v wg-quick &> /dev/null; then
+    echo "⚠️  Внимание: wireguard-tools не найден. Функции VPN будут работать в режиме симуляции."
+fi
+
 # Запускаем Electron в dev режиме
 echo "⚡ Запуск Electron..."
 npm run electron:dev
