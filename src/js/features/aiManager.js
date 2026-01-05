@@ -81,13 +81,75 @@ class AIManager {
                 testEndpoint: '/models'
             }
         };
+        
+        // MCP Integration
+        this.mcpServers = []; // { name, url, status }
+        this.mcpTools = new Map(); // server -> tools[]
     }
 
     init() {
         this.load();
         this.render();
         this.setupEventListeners();
+        this.initMcp();
     }
+
+    // === MCP Integration ===
+    
+    async initMcp() {
+        // Load MCP config if exists
+        try {
+            const saved = localStorage.getItem('gitody_mcp_servers');
+            this.mcpServers = saved ? JSON.parse(saved) : [];
+            this.refreshMcpTools();
+        } catch (e) {
+            console.error('[MCP] Load error:', e);
+        }
+    }
+
+    async refreshMcpTools() {
+        // In a real app, this would connect to MCP servers via stdio or SSE.
+        // Since we are in a browser/Electron environment, we can support SSE-based MCP servers or local bridges.
+        // For now, we simulate tool registration based on the user query example.
+        
+        this.mcpServers.forEach(server => {
+            // Simulated discovery
+            if (server.name === 'ImageGen') {
+                this.registerMcpTool(server.name, 'generate_image', async (params) => {
+                    // Simulation of the user provided snippet
+                    const RED_CIRCLE_BASE64 = "/9j/4AAQSkZJRgABAgEASABIAAD/2w..."; // Mock
+                    return {
+                        content: [
+                            {
+                                type: "image",
+                                data: RED_CIRCLE_BASE64, // In reality would be real base64
+                                mimeType: "image/jpeg",
+                            },
+                        ],
+                    };
+                });
+            }
+        });
+    }
+
+    registerMcpTool(serverName, toolName, handler) {
+        if (!this.mcpTools.has(serverName)) {
+            this.mcpTools.set(serverName, []);
+        }
+        const tools = this.mcpTools.get(serverName);
+        tools.push({ name: toolName, handler });
+        console.log(`[MCP] Registered tool ${toolName} from ${serverName}`);
+    }
+
+    async callMcpTool(serverName, toolName, params) {
+        const tools = this.mcpTools.get(serverName);
+        const tool = tools?.find(t => t.name === toolName);
+        if (!tool) throw new Error(`Tool ${toolName} not found on ${serverName}`);
+        
+        return await tool.handler(params);
+    }
+
+    // === Existing AI Methods ===
 
     load() {
         try {
@@ -149,6 +211,39 @@ class AIManager {
         }
 
         this.updateProviderStatuses();
+        this.renderMcpSection();
+    }
+
+    renderMcpSection() {
+        // Add MCP UI section if needed, or integrate into existing tabs
+        // Ideally we append this to a specific container for MCP settings
+        const container = document.getElementById('mcpServersList');
+        if (!container) return; // Need to add this to HTML first
+        
+        container.innerHTML = this.mcpServers.map(server => `
+            <div class="ai-key-item">
+                <div class="ai-key-info">
+                    <div class="ai-key-provider">MCP: ${server.name}</div>
+                    <div class="ai-key-value">${server.url}</div>
+                </div>
+                <div class="ai-key-actions">
+                    <button class="monitor-btn danger" onclick="aiManager.removeMcpServer('${server.name}')">×</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    addMcpServer(name, url) {
+        this.mcpServers.push({ name, url, status: 'unknown' });
+        localStorage.setItem('gitody_mcp_servers', JSON.stringify(this.mcpServers));
+        this.refreshMcpTools();
+        this.render();
+    }
+
+    removeMcpServer(name) {
+        this.mcpServers = this.mcpServers.filter(s => s.name !== name);
+        localStorage.setItem('gitody_mcp_servers', JSON.stringify(this.mcpServers));
+        this.render();
     }
 
     updateProviderStatuses() {
