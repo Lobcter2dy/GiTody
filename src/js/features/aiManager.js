@@ -214,30 +214,107 @@ class AIManager {
         this.renderMcpSection();
     }
 
+    showAddMcpModal() {
+        const modalHtml = `
+            <div class="modal-overlay active" id="mcpModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <span>Add MCP Server</span>
+                        <button class="modal-close" onclick="document.getElementById('mcpModal').remove()">×</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label>Name</label>
+                            <input type="text" id="mcpName" class="form-input" placeholder="My Server">
+                        </div>
+                        <div class="form-group">
+                            <label>Config (JSON)</label>
+                            <textarea id="mcpConfig" class="form-input" style="height: 100px;" placeholder='{"command": "node", "args": ["server.js"]}'></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="monitor-btn" onclick="document.getElementById('mcpModal').remove()">Cancel</button>
+                        <button class="monitor-btn primary" onclick="aiManager.saveMcpServer()">Save</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+
+    saveMcpServer() {
+        const name = document.getElementById('mcpName').value;
+        const configStr = document.getElementById('mcpConfig').value;
+        
+        try {
+            const config = JSON.parse(configStr);
+            this.addMcpServer(name, config);
+            document.getElementById('mcpModal').remove();
+        } catch (e) {
+            alert('Invalid JSON config: ' + e.message);
+        }
+    }
+
+    importMcpConfig() {
+        const input = prompt('Paste MCP Deep Link (cursor://...) or Base64 Config:');
+        if (!input) return;
+
+        try {
+            let configStr = input;
+            let name = 'Imported Server';
+
+            // Check if it's a deep link
+            if (input.startsWith('cursor://')) {
+                const url = new URL(input);
+                name = url.searchParams.get('name') || name;
+                const base64Config = url.searchParams.get('config');
+                if (base64Config) {
+                    configStr = atob(base64Config);
+                }
+            } else {
+                // Try to decode if it looks like base64 (no spaces, basic check)
+                if (!input.trim().startsWith('{') && /^[a-zA-Z0-9+/=]+$/.test(input.trim())) {
+                    try {
+                        const decoded = atob(input);
+                        if (decoded.startsWith('{')) configStr = decoded;
+                    } catch (e) {
+                        // Not base64, treat as raw json
+                    }
+                }
+            }
+
+            const config = JSON.parse(configStr);
+            this.addMcpServer(name, config);
+            alert(`MCP Server '${name}' imported successfully!`);
+        } catch (e) {
+            console.error(e);
+            alert('Failed to import config: ' + e.message);
+        }
+    }
+
+    addMcpServer(name, config) {
+        // Store config instead of just URL
+        this.mcpServers.push({ name, config, status: 'unknown' });
+        localStorage.setItem('gitody_mcp_servers', JSON.stringify(this.mcpServers));
+        this.refreshMcpTools();
+        this.render();
+    }
+
     renderMcpSection() {
-        // Add MCP UI section if needed, or integrate into existing tabs
-        // Ideally we append this to a specific container for MCP settings
         const container = document.getElementById('mcpServersList');
-        if (!container) return; // Need to add this to HTML first
+        if (!container) return;
         
         container.innerHTML = this.mcpServers.map(server => `
             <div class="ai-key-item">
                 <div class="ai-key-info">
-                    <div class="ai-key-provider">MCP: ${server.name}</div>
-                    <div class="ai-key-value">${server.url}</div>
+                    <div class="ai-key-provider">MCP: ${this.escapeHtml(server.name)}</div>
+                    <div class="ai-key-value" style="font-size: 10px; opacity: 0.7;">${this.escapeHtml(JSON.stringify(server.config).substring(0, 50))}...</div>
                 </div>
                 <div class="ai-key-actions">
                     <button class="monitor-btn danger" onclick="aiManager.removeMcpServer('${server.name}')">×</button>
                 </div>
             </div>
         `).join('');
-    }
-
-    addMcpServer(name, url) {
-        this.mcpServers.push({ name, url, status: 'unknown' });
-        localStorage.setItem('gitody_mcp_servers', JSON.stringify(this.mcpServers));
-        this.refreshMcpTools();
-        this.render();
     }
 
     removeMcpServer(name) {

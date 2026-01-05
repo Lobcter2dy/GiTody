@@ -260,10 +260,28 @@
                     <div class="settings-sidebar">
                         <button class="settings-icon-btn active" data-section="system">💻 System</button>
                         <button class="settings-icon-btn" data-section="network" onclick="navRing.setActiveTab('network')">🌐 Network</button>
+                        <button class="settings-icon-btn" data-section="ai">🤖 AI</button>
                     </div>
                     <div class="settings-content">
                         <div id="settings-system" class="settings-section active">
                             <!-- System Monitor Cards injected here -->
+                        </div>
+                        <div id="settings-ai" class="settings-section">
+                            <div class="monitor-header">
+                                <div class="monitor-title">AI & Integrations</div>
+                            </div>
+                            <div class="settings-group">
+                                <div class="settings-group-title">AI Providers</div>
+                                <div id="aiKeysList" class="ai-keys-list"></div>
+                                <button class="monitor-btn primary" onclick="aiManager.showAddKeyModal()">+ Add Key</button>
+                            </div>
+                            <div class="settings-group" style="margin-top: 20px;">
+                                <div class="settings-group-title">MCP Servers</div>
+                                <div class="settings-desc">Model Context Protocol integration for extending AI capabilities.</div>
+                                <div id="mcpServersList" class="ai-keys-list"></div>
+                                <button class="monitor-btn primary" onclick="aiManager.showAddMcpModal()">+ Add MCP Server</button>
+                                <button class="monitor-btn" onclick="aiManager.importMcpConfig()" style="margin-left: 10px;">📥 Import Config</button>
+                            </div>
                         </div>
                     </div>
                 </div>
