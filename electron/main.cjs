@@ -191,11 +191,19 @@ ipcMain.handle('get-drivers-info', async () => {
 // VPN Handlers
 ipcMain.handle('vpn-command', async (event, { command, config }) => {
     return new Promise((resolve) => {
-        // Simulation for now as we might not have root/tools
-        // In real app: exec(`wg-quick ${command} ${config}`)
-        setTimeout(() => {
-            resolve({ success: true, message: `Command '${command}' executed for ${config}` });
-        }, 1000);
+        // Check for wg-quick existence first
+        exec('which wg-quick', (err) => {
+            if (err) {
+                resolve({ success: false, message: 'WireGuard tools (wg-quick) not found. Please install wireguard-tools.' });
+                return;
+            }
+            
+            // Simulation for safety unless explicit root permission logic is added
+            // In a real production app, you'd use sudo/pkexec
+            setTimeout(() => {
+                resolve({ success: true, message: `[SIMULATION] Command '${command}' executed for ${config}` });
+            }, 1000);
+        });
     });
 });
 

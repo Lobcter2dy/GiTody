@@ -68,8 +68,8 @@ export class NetworkManager {
         if (!canvas) return;
         
         const ctx = canvas.getContext('2d');
-        const width = canvas.width;
-        const height = canvas.height;
+        const width = canvas.width = canvas.offsetWidth;
+        const height = canvas.height = 200;
 
         // Push data
         this.history.rx.push(parseFloat(traffic.rx));
@@ -86,29 +86,40 @@ export class NetworkManager {
         ctx.strokeStyle = '#30363d';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        for(let i=0; i<width; i+=20) { ctx.moveTo(i,0); ctx.lineTo(i,height); }
-        for(let i=0; i<height; i+=20) { ctx.moveTo(0,i); ctx.lineTo(width,i); }
+        for(let i=0; i<width; i+=40) { ctx.moveTo(i,0); ctx.lineTo(i,height); }
+        for(let i=0; i<height; i+=40) { ctx.moveTo(0,i); ctx.lineTo(width,i); }
         ctx.stroke();
 
         // Download Line (Green)
-        this.drawLine(ctx, this.history.rx, '#3fb950', width, height);
+        this.drawArea(ctx, this.history.rx, '#3fb950', width, height);
         // Upload Line (Blue)
-        this.drawLine(ctx, this.history.tx, '#58a6ff', width, height);
+        this.drawArea(ctx, this.history.tx, '#58a6ff', width, height);
     }
 
-    drawLine(ctx, data, color, w, h) {
+    drawArea(ctx, data, color, w, h) {
         ctx.beginPath();
         ctx.strokeStyle = color;
         ctx.lineWidth = 2;
-        const max = Math.max(100, ...data); // Scale dynamic
+        const max = Math.max(100, ...data) * 1.2; // Scale dynamic
         
+        // Line
         data.forEach((val, i) => {
-            const x = (i / 60) * w;
+            const x = (i / 59) * w;
             const y = h - (val / max) * h;
             if (i === 0) ctx.moveTo(x, y);
             else ctx.lineTo(x, y);
         });
         ctx.stroke();
+
+        // Gradient Fill
+        ctx.lineTo(w, h);
+        ctx.lineTo(0, h);
+        ctx.closePath();
+        const gradient = ctx.createLinearGradient(0, 0, 0, h);
+        gradient.addColorStop(0, color + '66'); // 40%
+        gradient.addColorStop(1, color + '00'); // 0%
+        ctx.fillStyle = gradient;
+        ctx.fill();
     }
 
     // === VPN ===
