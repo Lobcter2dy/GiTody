@@ -95,97 +95,148 @@
         </div>
     </div>
 
+    <!-- Monaco Editor Loader -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+
     <div class="container">
-        <!-- Sidebar -->
+        <!-- Sidebar (Shared or specific to GitHub?) -->
+        <!-- We keep sidebar here, but it might need to be inside GitHub tab if it's specific. 
+             However, repoManager controls it. Let's keep it global for now or hide it via CSS when not in GitHub/Editor. -->
         <aside class="sidebar" id="mainSidebar">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px">
                 <h4 style="margin:0">Repositories</h4>
                 <div style="display:flex; gap:5px;">
                     <button class="btn btn-sm btn-primary" onclick="githubManager.promptCreateRepo()" title="New Repo">+</button>
-                    <button class="btn btn-sm" onclick="githubManager.importRepo()" title="Import Local" style="background:#30363d">📥</button>
+                    <button class="btn btn-sm" onclick="githubManager.openLocalRepo()" title="Local Repo" style="background:#30363d">📂</button>
+                    <button class="btn btn-sm" onclick="githubManager.importRepo()" title="Import" style="background:#30363d">📥</button>
                 </div>
             </div>
             <div id="repoList"></div>
+            <div id="fileStructure" class="file-structure" style="display:flex; flex-direction:column; flex:1; margin-top:20px; border-top:1px solid #30363d; padding-top:10px;">
+                <div class="file-structure-header" style="margin-bottom:10px; font-size:12px; font-weight:600; color:#8b949e;">FILES</div>
+                <div id="repoFileTree" class="file-tree"></div>
+            </div>
         </aside>
 
         <!-- Main content -->
         <main class="main-content">
             <div id="sync-info" style="font-size:10px; color:#8b949e; text-align:right; padding:5px 20px 0 0; height:15px"></div>
-            <div class="github-panel">
-                <nav class="github-nav-icons">
-                    <button class="github-icon-btn active" data-section="overview" title="Contents">📁</button>
-                    <button class="github-icon-btn" data-section="branches" title="Branches">🌿</button>
-                    <button class="github-icon-btn" data-section="pullrequests" title="PRs">🔀</button>
-                    <button class="github-icon-btn" data-section="issues" title="Issues">❗</button>
-                    <button class="github-icon-btn" data-section="actions" title="Actions">⚡</button>
-                    <button class="github-icon-btn" data-section="releases" title="Releases">📦</button>
-                    <button class="github-icon-btn" data-section="settings" title="Information & Settings">⚙️</button>
-                </nav>
+            
+            <!-- TAB: GitHub -->
+            <div id="github" class="tab-content active" style="height:100%; display:none;">
+                <div class="github-panel" style="height:100%;">
+                    <nav class="github-nav-icons">
+                        <button class="github-icon-btn active" data-section="overview" title="Contents">📁</button>
+                        <button class="github-icon-btn" data-section="branches" title="Branches">🌿</button>
+                        <button class="github-icon-btn" data-section="pullrequests" title="PRs">🔀</button>
+                        <button class="github-icon-btn" data-section="issues" title="Issues">❗</button>
+                        <button class="github-icon-btn" data-section="actions" title="Actions">⚡</button>
+                        <button class="github-icon-btn" data-section="releases" title="Releases">📦</button>
+                        <button class="github-icon-btn" data-section="settings" title="Information & Settings">⚙️</button>
+                    </nav>
 
-                <div class="github-content">
-                    <!-- Overview -->
-                    <div id="section-overview" class="github-section active">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px">
-                            <h3 style="margin:0">Files</h3>
-                            <button class="btn btn-sm" onclick="githubManager.syncAll()" title="Синхронизировать всё">↻ Refresh</button>
-                        </div>
-                        <div id="repoFileTree"></div>
-                        <div id="codePreview" style="display:none; margin-top:20px">
-                            <h4 id="previewFileName"></h4>
-                            <textarea id="previewContent" class="form-input" style="height:300px; font-family:monospace; background:#0d1117;"></textarea>
-                            <div style="display:flex; gap:10px; margin-top:10px;">
-                                <button class="btn btn-sm btn-primary" onclick="githubManager.applyEditedChanges()">Apply Changes</button>
-                                <button class="btn btn-sm" onclick="githubManager.closePreview()">Close</button>
+                    <div class="github-content">
+                        <!-- Overview -->
+                        <div id="section-overview" class="github-section active">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px">
+                                <h3 style="margin:0">Overview</h3>
+                                <button class="btn btn-sm" onclick="githubManager.syncAll()" title="Синхронизировать всё">↻ Refresh</button>
+                            </div>
+                            <!-- Files are now in sidebar, this can be a dashboard or readme preview -->
+                            <div id="readmePreview" style="padding:20px; background:#0d1117; border-radius:8px; border:1px solid #30363d;">
+                                Select a file in the sidebar to edit.
+                            </div>
+                            
+                            <div id="codePreview" style="display:none; margin-top:20px">
+                                <h4 id="previewFileName"></h4>
+                                <textarea id="previewContent" class="form-input" style="height:300px; font-family:monospace; background:#0d1117;"></textarea>
+                                <div style="display:flex; gap:10px; margin-top:10px;">
+                                    <button class="btn btn-sm btn-primary" onclick="githubManager.applyEditedChanges()">Apply Changes</button>
+                                    <button class="btn btn-sm" onclick="githubManager.closePreview()">Close</button>
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Branches -->
-                    <div id="section-branches" class="github-section">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px">
-                            <h3>Branches</h3>
-                            <button class="btn btn-sm btn-primary" onclick="githubManager.promptCreateBranch()">+ New Branch</button>
+                        <!-- Branches -->
+                        <div id="section-branches" class="github-section">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px">
+                                <h3>Branches</h3>
+                                <button class="btn btn-sm btn-primary" onclick="githubManager.promptCreateBranch()">+ New Branch</button>
+                            </div>
+                            <div id="branchesList"></div>
                         </div>
-                        <div id="branchesList"></div>
-                    </div>
 
-                    <!-- PRs -->
-                    <div id="section-pullrequests" class="github-section"><h3>PRs</h3><div id="prList"></div></div>
+                        <!-- PRs -->
+                        <div id="section-pullrequests" class="github-section"><h3>PRs</h3><div id="prList"></div></div>
 
-                    <!-- Issues -->
-                    <div id="section-issues" class="github-section">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px">
-                            <h3>Issues</h3>
-                            <button class="btn btn-sm btn-primary" onclick="githubManager.promptCreateIssue()">+ New Issue</button>
+                        <!-- Issues -->
+                        <div id="section-issues" class="github-section">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px">
+                                <h3>Issues</h3>
+                                <button class="btn btn-sm btn-primary" onclick="githubManager.promptCreateIssue()">+ New Issue</button>
+                            </div>
+                            <div id="issuesList"></div>
                         </div>
-                        <div id="issuesList"></div>
-                    </div>
 
-                    <!-- Actions -->
-                    <div id="section-actions" class="github-section"><h3>Workflows</h3><div id="actionsList"></div></div>
+                        <!-- Actions -->
+                        <div id="section-actions" class="github-section"><h3>Workflows</h3><div id="actionsList"></div></div>
 
-                    <!-- Releases -->
-                    <div id="section-releases" class="github-section"><h3>Releases</h3><div id="releasesList"></div></div>
+                        <!-- Releases -->
+                        <div id="section-releases" class="github-section"><h3>Releases</h3><div id="releasesList"></div></div>
 
-                    <!-- Settings (Information Tab renamed to Settings here for consistency) -->
-                    <div id="section-settings" class="github-section">
-                        <h3>Repository Information & Settings</h3>
-                        <div id="repoInfoPage">
-                            <div style="text-align:center; padding:100px 0; color:#8b949e;">
-                                <h2>Выберите репозиторий</h2>
-                                <p>Здесь будут отображены детальные настройки и статистика проекта</p>
+                        <!-- Settings -->
+                        <div id="section-settings" class="github-section">
+                            <h3>Repository Information & Settings</h3>
+                            <div id="repoInfoPage">
+                                <div style="text-align:center; padding:100px 0; color:#8b949e;">
+                                    <h2>Выберите репозиторий</h2>
+                                    <p>Здесь будут отображены детальные настройки и статистика проекта</p>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+
+            <!-- TAB: Editor (Monaco) -->
+            <div id="editor" class="tab-content" style="height:100%; display:none; flex-direction:column;">
+                <div class="editor-tabs" id="editorTabs">
+                    <!-- Tabs injected here -->
+                </div>
+                <div id="monaco-editor-container" style="flex:1; width:100%;"></div>
+                <div class="editor-status-bar">
+                    <div id="editorLang">Plain Text</div>
+                    <div id="editorCursor">Ln 1, Col 1</div>
+                </div>
+            </div>
+
+            <!-- Other Tabs Placeholders -->
+            <div id="dashboard" class="tab-content" style="display:none; padding:20px;"><h2>Dashboard</h2></div>
+            <div id="chat" class="tab-content" style="display:none; padding:20px;"><h2>AI Chat</h2></div>
+            <div id="settings" class="tab-content" style="display:none; padding:20px;"><h2>Settings</h2></div>
+
         </main>
     </div>
 
-    <!-- Floating Arc Navigation (Legacy Support) -->
-    <div class="nav-arc" id="navArc" style="display:none">
-        <button class="nav-arc-item active" data-tab="github" data-index="1">G</button>
+    <!-- Floating Arc Navigation -->
+    <div class="nav-arc" id="navArc">
+        <button class="nav-arc-item" data-tab="dashboard" data-index="0" title="Dashboard">🏠</button>
+        <button class="nav-arc-item active" data-tab="github" data-index="1" title="GitHub">🐱</button>
+        <button class="nav-arc-item" data-tab="chat" data-index="2" title="AI Chat">🤖</button>
+        <button class="nav-arc-item" data-tab="editor" data-index="3" title="Code Editor">📝</button>
+        <button class="nav-arc-item" data-tab="settings" data-index="4" title="Settings">⚙️</button>
     </div>
+
+    <style>
+        .tab-content.active { display: flex !important; }
+        .editor-tabs { display: flex; background: #0d1117; border-bottom: 1px solid #30363d; overflow-x: auto; }
+        .editor-tab { padding: 8px 12px; cursor: pointer; color: #8b949e; border-right: 1px solid #30363d; display: flex; align-items: center; gap: 8px; font-size: 12px; }
+        .editor-tab.active { background: #161b22; color: #c9d1d9; border-top: 2px solid #58a6ff; }
+        .editor-tab:hover { background: #161b22; }
+        .editor-tab-close { opacity: 0.5; font-size: 14px; }
+        .editor-tab-close:hover { opacity: 1; color: #f85149; }
+        .file-structure { overflow-y: auto; }
+    </style>
 
     <script type="module" src="./js/main.js"></script>
 </body>
