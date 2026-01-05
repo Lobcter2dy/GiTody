@@ -1,5 +1,5 @@
 /**
- * GitHub Auth - Полноценная авторизация с OAuth и верификацией
+ * GitHub Auth - Полноценная авторизация с улучшенной диагностикой
  */
 
 import { session } from '../storage/session.js';
@@ -10,61 +10,63 @@ class GitHubAuth {
     constructor() {
         this.user = session.getUser();
         this.isConnected = !!this.user && session.hasToken();
-        this.tokenScopes = null; // Права доступа токена
-        console.log('[Auth] Created, connected:', this.isConnected);
+        this.tokenScopes = null;
+        console.log('[Auth] Создан, подключен:', this.isConnected);
     }
 
     async init() {
-        console.log('[Auth] Init...');
+        console.log('[Auth] Инициализация...');
         
-        // Если есть кэшированный пользователь - сразу показать
         if (this.user) {
             this.isConnected = true;
             this.updateUI();
-            console.log('[Auth] Restored user:', this.user.login);
+            console.log('[Auth] Восстановлен пользователь:', this.user.login);
         }
         
-        // Проверить токен в фоне с полной верификацией
         if (session.hasToken()) {
+            console.log('[Auth] Проверка токена...');
             await this.verifyToken();
         }
         
         return this.isConnected;
     }
 
-    /**
-     * Полная верификация токена с проверкой прав доступа
-     */
     async verifyToken() {
         try {
             const token = session.getToken();
-            if (!token) return false;
+            if (!token) {
+                console.warn('[Auth] Нет токена');
+                return false;
+            }
 
-            // Проверить токен и получить информацию о пользователе
+            console.log('[Auth] Проверка токена:', token.substring(0, 10) + '...');
+
             const res = await fetch(`${API}/user`, {
                 headers: { 
                     'Authorization': `Bearer ${token}`,
-                    'Accept': 'application/vnd.github.v3+json'
+                    'Accept': 'application/vnd.github+json',
+                    'X-GitHub-Api-Version': '2022-11-28'
                 }
             });
             
+            console.log('[Auth] Ответ сервера:', res.status, res.statusText);
+            
             if (!res.ok) {
                 if (res.status === 401) {
-                    // Токен невалидный - удалить
-                    console.warn('[Auth] Token invalid, removing...');
+                    console.error('[Auth] Токен невалиден!');
                     session.logout();
                     this.user = null;
                     this.isConnected = false;
                     this.updateUI();
                     return false;
                 }
-                console.warn('[Auth] Token check failed:', res.status);
+                console.warn('[Auth] Ошибка проверки:', res.status);
                 return false;
             }
 
-            // Получить права доступа из заголовков
-            const scopes = res.headers.get('x-oauth-scopes') || res.headers.get('x-accepted-oauth-scopes') || '';
+            const scopes = res.headers.get('x-oauth-scopes') || '';
             this.tokenScopes = scopes.split(',').map(s => s.trim()).filter(Boolean);
+            console.log('[Auth] Права токена:', this.tokenScopes);
 
             const user = await res.json();
             this.user = user;
@@ -72,78 +74,85 @@ class GitHubAuth {
             session.setUser(user);
             this.updateUI();
             
-            console.log('[Auth] Token verified, user:', user.login, 'scopes:', this.tokenScopes);
-            
-            // Проверить наличие необходимых прав
-            this.checkRequiredScopes();
-            
+            console.log('[Auth] ✓ Токен валиден, пользователь:', user.login);
             return true;
         } catch (e) {
-            console.warn('[Auth] Network error:', e.message);
-            // Не удаляем токен при сетевой ошибке
+            console.error('[Auth] Ошибка сети:', e);
             return false;
         }
     }
 
-    /**
-     * Проверить наличие необходимых прав доступа
-     */
-    checkRequiredScopes() {
-        const required = ['repo', 'read:user', 'user:email'];
-        const missing = required.filter(scope => !this.tokenScopes?.includes(scope));
-        
-        if (missing.length > 0) {
-            console.warn('[Auth] Missing scopes:', missing);
-            // Можно показать предупреждение пользователю
-        }
-    }
-
-    /**
-     * Подключение через Personal Access Token
-     */
     async connect(token) {
+        console.log('[Auth] === НАЧАЛО ПОДКЛЮЧЕНИЯ ===');
+        
         if (!token?.trim()) {
+            console.error('[Auth] Пустой токен');
             return { success: false, error: 'Введите токен' };
         }
         
         const cleanToken = token.trim();
+        console.log('[Auth] Токен:', cleanToken.substring(0, 15) + '... (длина: ' + cleanToken.length + ')');
+        
+        // Проверка формата токена
+        if (cleanToken.startsWith('ghp_') && cleanToken.length < 40) {
+            return { success: false, error: 'Токен слишком короткий. Проверьте, что скопировали полностью.' };
+        }
         
         try {
+            console.log('[Auth] Отправка запроса к GitHub API...');
+            
             const res = await fetch(`${API}/user`, {
+                method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${cleanToken}`,
-                    'Accept': 'application/vnd.github.v3+json'
+                    'Accept': 'application/vnd.github+json',
+                    'X-GitHub-Api-Version': '2022-11-28'
                 }
             });
 
+            console.log('[Auth] Ответ:', res.status, res.statusText);
+            console.log('[Auth] Headers:', Object.fromEntries(res.headers.entries()));
+
             if (!res.ok) {
+                let errorMsg = 'Ошибка подключения';
+                
                 if (res.status === 401) {
-                    return { success: false, error: 'Неверный токен. Проверьте правильность токена.' };
+                    errorMsg = 'Неверный токен. Проверьте:\n\n1. Токен скопирован полностью\n2. Токен не удалён на GitHub\n3. Нет лишних пробелов';
+                } else if (res.status === 403) {
+                    errorMsg = 'Доступ запрещён. Проверьте права токена (repo, read:user)';
+                } else if (res.status === 404) {
+                    errorMsg = 'Неверный API endpoint. Обновите приложение.';
+                } else {
+                    errorMsg = `Ошибка ${res.status}: ${res.statusText}`;
                 }
-                if (res.status === 403) {
-                    return { success: false, error: 'Доступ запрещён. Проверьте права токена.' };
-                }
-                return { success: false, error: `Ошибка ${res.status}: ${res.statusText}` };
+                
+                console.error('[Auth] Ошибка:', errorMsg);
+                return { success: false, error: errorMsg };
             }
 
-            // Получить права доступа
-            const scopes = res.headers.get('x-oauth-scopes') || res.headers.get('x-accepted-oauth-scopes') || '';
+            // Права доступа
+            const scopes = res.headers.get('x-oauth-scopes') || '';
             this.tokenScopes = scopes.split(',').map(s => s.trim()).filter(Boolean);
+            console.log('[Auth] Права:', this.tokenScopes);
 
             const user = await res.json();
+            console.log('[Auth] Пользователь:', user.login, user.name);
             
-            // Проверить права
-            const required = ['repo', 'read:user'];
-            const missing = required.filter(scope => !this.tokenScopes.includes(scope));
+            // Проверка обязательных прав
+            const required = ['repo'];
+            const hasRequired = required.every(scope => this.tokenScopes.includes(scope));
             
-            if (missing.length > 0) {
+            if (!hasRequired && this.tokenScopes.length > 0) {
+                const missing = required.filter(scope => !this.tokenScopes.includes(scope));
+                console.warn('[Auth] Недостающие права:', missing);
                 return { 
                     success: false, 
-                    error: `Недостаточно прав. Требуются: ${missing.join(', ')}. Проверьте настройки токена.` 
+                    error: `Недостаточно прав. \n\nТребуется: ${missing.join(', ')}\nЕсть: ${this.tokenScopes.join(', ') || 'нет'}\n\nСоздайте новый токен с правами 'repo'.` 
                 };
             }
             
             // СОХРАНИТЬ
+            console.log('[Auth] Сохранение токена и пользователя...');
             session.setToken(cleanToken);
             session.setUser(user);
             
@@ -151,30 +160,30 @@ class GitHubAuth {
             this.isConnected = true;
             this.updateUI();
             
-            console.log('[Auth] Connected:', user.login, 'scopes:', this.tokenScopes);
+            console.log('[Auth] === ✓ ПОДКЛЮЧЕНИЕ УСПЕШНО ===');
+            console.log('[Auth] User:', user.login);
+            console.log('[Auth] Scopes:', this.tokenScopes);
+            
+            // Проверка что токен реально сохранён
+            setTimeout(() => {
+                const saved = session.getToken();
+                console.log('[Auth] Проверка сохранения:', saved ? '✓ OK' : '✗ ПРОБЛЕМА!');
+            }, 100);
             
             return { success: true, user, scopes: this.tokenScopes };
         } catch (e) {
-            console.error('[Auth] Connect error:', e);
-            return { success: false, error: 'Ошибка сети. Проверьте подключение к интернету.' };
+            console.error('[Auth] Ошибка сети:', e);
+            return { 
+                success: false, 
+                error: 'Ошибка сети:\n\n' + e.message + '\n\nПроверьте интернет соединение.' 
+            };
         }
     }
 
-    /**
-     * Подключение через OAuth (открыть окно авторизации)
-     */
     async connectOAuth() {
         try {
-            // Импортировать OAuth модуль динамически
             const { githubOAuth } = await import('./githubOAuth.js');
-            
-            // Запустить OAuth flow
             const result = await githubOAuth.authorize();
-            
-            // После получения кода - обменять на токен
-            // В реальности это делается через backend, здесь используем упрощённую версию
-            // Пользователь должен будет ввести токен вручную после OAuth
-            
             return { success: true, message: 'OAuth авторизация успешна. Введите полученный токен.' };
         } catch (e) {
             console.error('[Auth] OAuth error:', e);
@@ -182,32 +191,25 @@ class GitHubAuth {
         }
     }
 
-    /**
-     * Открыть страницу создания токена
-     */
     openTokenPage() {
-        const scopes = 'repo,read:user,user:email,delete_repo';
-        const url = `https://github.com/settings/tokens/new?description=GITODY-${Date.now()}&scopes=${scopes}`;
+        const scopes = 'repo,read:user,user:email,delete_repo,admin:repo_hook,admin:org_hook';
+        const description = `GITODY-${Date.now()}`;
+        const url = `https://github.com/settings/tokens/new?description=${encodeURIComponent(description)}&scopes=${scopes}`;
+        console.log('[Auth] Открытие страницы создания токена:', url);
         window.open(url, '_blank');
     }
 
-    /**
-     * Выйти из аккаунта
-     */
     logout() {
+        console.log('[Auth] Выход...');
         session.logout();
         this.user = null;
         this.isConnected = false;
         this.tokenScopes = null;
         this.updateUI();
-        console.log('[Auth] Logged out');
+        console.log('[Auth] Вышли');
     }
 
-    /**
-     * Обновить UI элементы
-     */
     updateUI() {
-        // Аватар
         const avatar = document.getElementById('userAvatarBtn');
         if (avatar) {
             avatar.innerHTML = this.user?.avatar_url
@@ -215,7 +217,6 @@ class GitHubAuth {
                 : `<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 8a3 3 0 100-6 3 3 0 000 6zm0 2c-2.67 0-8 1.34-8 4v1h16v-1c0-2.66-5.33-4-8-4z"/></svg>`;
         }
 
-        // Dropdown
         const info = document.getElementById('dropdownUserInfo');
         if (info) {
             info.innerHTML = this.user
@@ -223,11 +224,9 @@ class GitHubAuth {
                 : `<div class="dropdown-user-name">Не авторизован</div><div class="dropdown-user-email">Подключите GitHub</div>`;
         }
 
-        // Галочка
         const check = document.getElementById('connectCheck');
         if (check) check.classList.toggle('visible', this.isConnected);
 
-        // Панель подключения
         const card = document.querySelector('.connect-card');
         const connectInfo = document.getElementById('connectInfo');
         
@@ -254,42 +253,16 @@ class GitHubAuth {
         }
     }
 
-    /**
-     * Получить токен
-     */
-    getToken() { 
-        return session.getToken(); 
-    }
+    getToken() { return session.getToken(); }
+    getUser() { return this.user; }
+    getScopes() { return this.tokenScopes || []; }
+    hasScope(scope) { return this.tokenScopes?.includes(scope) || false; }
 
-    /**
-     * Получить пользователя
-     */
-    getUser() { 
-        return this.user; 
-    }
-
-    /**
-     * Получить права доступа токена
-     */
-    getScopes() {
-        return this.tokenScopes || [];
-    }
-
-    /**
-     * Проверить наличие права доступа
-     */
-    hasScope(scope) {
-        return this.tokenScopes?.includes(scope) || false;
-    }
-
-    /**
-     * Получить заголовки для API запросов
-     */
     getHeaders() {
         const token = this.getToken();
         return {
             'Authorization': token ? `Bearer ${token}` : '',
-            'Accept': 'application/vnd.github.v3+json',
+            'Accept': 'application/vnd.github+json',
             'Content-Type': 'application/json',
             'X-GitHub-Api-Version': '2022-11-28'
         };
