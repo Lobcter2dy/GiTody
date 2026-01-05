@@ -1,0 +1,141 @@
+/* === Arc Navigation - Premium Matte === */
+
+.nav-arc {
+    position: fixed;
+    bottom: -40px;
+    right: -40px;
+    width: 380px;
+    height: 380px;
+    z-index: 1000;
+}
+
+/* Невидимая область для hover в углу - МЕНЬШАЯ ЗОНА */
+.nav-arc::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 140px;
+    height: 140px;
+    border-radius: 50% 0 0 0;
+    pointer-events: auto;
+}
+
+/* Icons - Premium Glass Effect */
+.nav-arc-item {
+    position: absolute;
+    width: 46px;
+    height: 46px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(145deg, rgba(18, 21, 26, 0.98), rgba(10, 12, 15, 0.98));
+    border: 1px solid rgba(45, 51, 59, 0.6);
+    border-radius: 50%;
+    color: #9198a1;
+    cursor: pointer;
+    pointer-events: auto;
+    opacity: 0.06;
+    transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 
+        0 4px 16px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.nav-arc-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 50%);
+    pointer-events: none;
+}
+
+.nav-arc-item svg {
+    width: 20px;
+    height: 20px;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+}
+
+/* Positions - 7 icons on arc */
+.nav-arc-item[data-index="0"] { bottom: 200px; right: 48px; }
+.nav-arc-item[data-index="1"] { bottom: 195px; right: 88px; }
+.nav-arc-item[data-index="2"] { bottom: 180px; right: 125px; }
+.nav-arc-item[data-index="3"] { bottom: 155px; right: 158px; }
+.nav-arc-item[data-index="4"] { bottom: 122px; right: 183px; }
+.nav-arc-item[data-index="5"] { bottom: 82px; right: 200px; }
+.nav-arc-item[data-index="6"] { bottom: 42px; right: 205px; }
+
+/* Hover на область угла - показать все иконки */
+.nav-arc:hover .nav-arc-item {
+    opacity: 1;
+}
+
+/* Individual hover на конкретную иконку */
+.nav-arc-item:hover {
+    background: linear-gradient(145deg, rgba(88, 166, 255, 0.15), rgba(88, 166, 255, 0.08));
+    border-color: rgba(88, 166, 255, 0.5);
+    color: #79c0ff;
+    transform: scale(1.12);
+    box-shadow: 
+        0 8px 24px rgba(0, 0, 0, 0.5),
+        0 0 24px rgba(88, 166, 255, 0.25),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* Active state */
+.nav-arc-item.active {
+    background: linear-gradient(145deg, rgba(88, 166, 255, 0.18), rgba(88, 166, 255, 0.1));
+    border-color: rgba(88, 166, 255, 0.6);
+    color: #58a6ff;
+    opacity: 0.12;
+}
+
+.nav-arc:hover .nav-arc-item.active {
+    opacity: 1;
+    box-shadow: 
+        0 6px 20px rgba(0, 0, 0, 0.4),
+        0 0 20px rgba(88, 166, 255, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* Animations */
+@keyframes arcItemAppear {
+    from {
+        opacity: 0;
+        transform: scale(0.6) rotate(-10deg);
+    }
+    to {
+        opacity: 0.06;
+        transform: scale(1) rotate(0);
+    }
+}
+
+.nav-arc-item {
+    animation: arcItemAppear 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+}
+
+.nav-arc-item[data-index="0"] { animation-delay: 0.05s; }
+.nav-arc-item[data-index="1"] { animation-delay: 0.1s; }
+.nav-arc-item[data-index="2"] { animation-delay: 0.15s; }
+.nav-arc-item[data-index="3"] { animation-delay: 0.2s; }
+.nav-arc-item[data-index="4"] { animation-delay: 0.25s; }
+.nav-arc-item[data-index="5"] { animation-delay: 0.3s; }
+.nav-arc-item[data-index="6"] { animation-delay: 0.35s; }
+
+/* Pulse effect */
+@keyframes arcPulse {
+    0% { transform: scale(1); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5); }
+    50% { transform: scale(1.15); box-shadow: 0 6px 24px rgba(88, 166, 255, 0.3); }
+    100% { transform: scale(1); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5); }
+}
+
+.nav-arc-item.pulse {
+    animation: arcPulse 0.3s ease;
+}

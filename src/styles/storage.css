@@ -1,0 +1,288 @@
+/* === Storage Page Styles === */
+
+.storage-page {
+    display: flex;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* Storage Icon Navigation - вертикальная боковая панель */
+.storage-icon-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 6px 4px;
+    background: transparent;
+    border-right: none;
+    flex-shrink: 0;
+    width: 44px;
+}
+
+.storage-icon-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition: all 0.15s;
+    padding: 0;
+}
+
+.storage-icon-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+}
+
+.storage-icon-btn.active {
+    background: var(--bg-tertiary);
+    color: var(--accent);
+}
+
+.storage-icon-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* Storage Main Content */
+.storage-main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    gap: 16px;
+    overflow-y: auto;
+    min-width: 0;
+}
+
+/* Storage Content Wrapper */
+.storage-content-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 0;
+    padding: 20px;
+}
+
+/* Breadcrumb */
+.storage-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    padding: 8px 0;
+}
+
+.breadcrumb-item {
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color 0.15s;
+}
+
+.breadcrumb-item:hover {
+    color: var(--accent);
+}
+
+.breadcrumb-item:last-child {
+    color: var(--text-primary);
+    cursor: default;
+}
+
+.breadcrumb-separator {
+    color: var(--text-tertiary);
+}
+
+/* Content */
+.storage-content {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+/* Files Grid */
+.files-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+    padding: 4px;
+}
+
+.files-grid.drag-over {
+    background: var(--accent-muted);
+    border-radius: 8px;
+}
+
+/* Empty State */
+.storage-empty {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--text-tertiary);
+}
+
+.storage-empty p {
+    margin-top: 16px;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.storage-empty span {
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+/* Storage Item */
+.storage-item {
+    background: var(--bg-tertiary);
+    background-image: var(--gradient-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.storage-item:hover {
+    border-color: var(--border-light);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.storage-item:hover .item-actions {
+    opacity: 1;
+}
+
+/* Item Icon */
+.item-icon {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+}
+
+.item-icon svg {
+    width: 32px;
+    height: 32px;
+}
+
+.folder-icon {
+    color: #d29922;
+}
+
+.file-icon svg {
+    width: 28px;
+    height: 28px;
+}
+
+/* Item Name */
+.item-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+/* Item Meta */
+.item-meta {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    text-align: center;
+}
+
+/* Item Actions */
+.item-actions {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.item-action-btn {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.item-action-btn:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-color: var(--border-light);
+}
+
+.item-action-btn.danger:hover {
+    background: var(--danger-muted);
+    color: var(--danger);
+    border-color: var(--danger);
+}
+
+/* Info Bar */
+.storage-info-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
+
+.storage-stats {
+    display: flex;
+    gap: 4px;
+}
+
+.storage-stats span:first-child {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+/* Notification */
+.storage-notification {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 10px 16px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--success);
+    border-radius: 6px;
+    color: var(--success);
+    font-size: 12px;
+    z-index: 10000;
+    transition: opacity 0.3s;
+}
+
+.storage-notification.fade-out {
+    opacity: 0;
+}

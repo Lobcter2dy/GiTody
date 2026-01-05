@@ -1,0 +1,88 @@
+/* === Premium Base Styles === */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    font-size: 14px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+}
+
+html, body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.5;
+    height: 100vh;
+    overflow: hidden !important;
+}
+
+/* Matte Texture Overlay */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 99999;
+    opacity: var(--noise-opacity);
+    background-image: var(--noise-filter);
+    background-repeat: repeat;
+    mix-blend-mode: overlay;
+}
+
+/* Premium Selection */
+::selection {
+    background: var(--accent-muted);
+    color: var(--text-primary);
+}
+
+::-moz-selection {
+    background: var(--accent-muted);
+    color: var(--text-primary);
+}
+
+/* Focus States */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px var(--accent);
+}
+
+/* Scrollbar - Hidden */
+::-webkit-scrollbar {
+    width: 0 !important;
+    height: 0 !important;
+    display: none !important;
+}
+
+* {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+}
+
+/* Premium Transitions */
+button, input, select, textarea, a {
+    transition: all var(--duration) var(--ease);
+}
+
+/* Image Rendering */
+img, svg {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+}
+
+/* Disable user select on UI elements */
+button, label, .no-select {
+    user-select: none;
+    -webkit-user-select: none;
+}

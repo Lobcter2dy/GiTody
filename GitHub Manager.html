@@ -1,0 +1,2498 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Менеджер репозиториев GitHub</title>
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --border: #30363d;
+            --border-light: #444c56;
+            --text-primary: #c9d1d9;
+            --text-secondary: #8b949e;
+            --text-tertiary: #6e7681;
+            --accent: #58a6ff;
+            --accent-hover: #79c0ff;
+            --success: #3fb950;
+            --danger: #f85149;
+            --warning: #d29922;
+            --duration: 200ms;
+            --ease: cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            animation: fadeInModal var(--duration) var(--ease);
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 32px;
+            max-width: 480px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: slideUp var(--duration) var(--ease);
+        }
+
+        .modal-header {
+            margin-bottom: 24px;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .modal-subtitle {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 20px;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color var(--duration) var(--ease);
+        }
+
+        .modal-close:hover {
+            color: var(--text-primary);
+        }
+
+        @keyframes fadeInModal {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            font-size: 14px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            height: 65px;
+        }
+
+        .github-logo {
+            width: 24px;
+            height: 24px;
+            border-radius: 3px;
+            background: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--bg-primary);
+            flex-shrink: 0;
+        }
+
+        .sidebar-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .repos-section {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px 0;
+        }
+
+        .repo-item {
+            padding: 8px 12px;
+            margin: 4px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color var(--duration) var(--ease);
+            color: var(--text-secondary);
+            font-size: 12px;
+            border: 1px solid transparent;
+            display: block;
+            width: calc(100% - 16px);
+            text-align: left;
+        }
+
+        .repo-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--border-light);
+            color: var(--text-primary);
+        }
+
+        .repo-item.active {
+            background: rgba(88, 166, 255, 0.1);
+            color: var(--accent);
+            border-color: var(--border-light);
+        }
+
+        .sidebar-footer {
+            padding: 12px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 8px;
+        }
+
+        /* Main content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 24px;
+            border-bottom: 1px solid var(--border);
+            height: 65px;
+            flex-shrink: 0;
+        }
+
+        .header-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 6px 16px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all var(--duration) var(--ease);
+            white-space: nowrap;
+        }
+
+        .btn:hover {
+            background: var(--border);
+            border-color: var(--border-light);
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: var(--bg-primary);
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            border-color: var(--accent-hover);
+        }
+
+        .btn-danger {
+            color: var(--danger);
+            border-color: var(--danger);
+        }
+
+        .btn-danger:hover {
+            background: rgba(248, 81, 73, 0.1);
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid var(--border);
+            padding: 0 24px;
+            flex-shrink: 0;
+        }
+
+        .tab {
+            padding: 12px 16px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all var(--duration) var(--ease);
+            border-bottom: 2px solid transparent;
+            margin: 0;
+            white-space: nowrap;
+        }
+
+        .tab:hover {
+            color: var(--text-primary);
+            border-bottom-color: var(--border-light);
+        }
+
+        .tab.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        /* Content area */
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Sections */
+        .section {
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+            padding: 0;
+        }
+
+        /* Cards and lists */
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: all var(--duration) var(--ease);
+        }
+
+        .card:hover {
+            border-color: var(--border-light);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .card-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .badge {
+            font-size: 11px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-weight: 500;
+            background: rgba(88, 166, 255, 0.1);
+            color: var(--accent);
+            border: 1px solid var(--border);
+        }
+
+        .badge-success {
+            background: rgba(63, 185, 80, 0.1);
+            color: var(--success);
+            border-color: transparent;
+        }
+
+        .badge-danger {
+            background: rgba(248, 81, 73, 0.1);
+            color: var(--danger);
+            border-color: transparent;
+        }
+
+        /* Forms */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+
+        .form-input,
+        .form-select,
+        .form-textarea {
+            width: 100%;
+            padding: 8px 12px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 12px;
+            transition: all var(--duration) var(--ease);
+            font-family: inherit;
+        }
+
+        .form-input:focus,
+        .form-select:focus,
+        .form-textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        /* Toggle switches */
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .toggle {
+            position: relative;
+            width: 40px;
+            height: 24px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all var(--duration) var(--ease);
+        }
+
+        .toggle::after {
+            content: '';
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            background: var(--text-secondary);
+            border-radius: 6px;
+            top: 2px;
+            left: 2px;
+            transition: all var(--duration) var(--ease);
+        }
+
+        .toggle.enabled {
+            background: var(--success);
+            border-color: var(--success);
+        }
+
+        .toggle.enabled::after {
+            background: white;
+            left: 20px;
+        }
+
+        /* Branch list */
+        .branch-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .branch-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            transition: all var(--duration) var(--ease);
+        }
+
+        .branch-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+            border-color: var(--border-light);
+        }
+
+        .branch-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .branch-name {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+            word-break: break-word;
+        }
+
+        .branch-meta {
+            font-size: 11px;
+            color: var(--text-tertiary);
+        }
+
+        .branch-actions {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        /* PR list */
+        .pr-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .pr-item {
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            transition: all var(--duration) var(--ease);
+        }
+
+        .pr-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+            border-color: var(--border-light);
+        }
+
+        .pr-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .pr-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--accent);
+            cursor: pointer;
+            transition: color var(--duration) var(--ease);
+        }
+
+        .pr-title:hover {
+            color: var(--accent-hover);
+        }
+
+        .pr-meta {
+            font-size: 11px;
+            color: var(--text-tertiary);
+            margin-top: 4px;
+        }
+
+        .pr-status {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        /* Settings grid */
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+        }
+
+        /* Accessibility */
+        button:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        input:focus-visible,
+        select:focus-visible,
+        textarea:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--border-light);
+        }
+
+        /* Loading animation */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .loading {
+            animation: pulse 2s var(--ease) infinite;
+        }
+
+        /* Grid layouts */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        /* Top header with user profile */
+        .top-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 24px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-secondary);
+            height: 50px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 4px;
+            background: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: var(--bg-primary);
+            font-size: 14px;
+        }
+
+        .app-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .search-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 6px 12px;
+            color: var(--text-secondary);
+            font-size: 12px;
+        }
+
+        .search-box input {
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            outline: none;
+            width: 150px;
+            font-size: 12px;
+        }
+
+        .search-box input::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        .header-icons {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .icon-btn {
+            width: 32px;
+            height: 32px;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            font-size: 16px;
+            transition: all var(--duration) var(--ease);
+        }
+
+        .icon-btn:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border-color: var(--border-light);
+        }
+
+        .user-menu {
+            position: relative;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent), #1f6feb);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            font-size: 14px;
+        }
+
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            min-width: 200px;
+            margin-top: 8px;
+            z-index: 999;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+        }
+
+        .dropdown-menu.active {
+            display: block;
+            animation: slideDown var(--duration) var(--ease);
+        }
+
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            cursor: pointer;
+            width: 100%;
+            text-align: left;
+            font-size: 12px;
+            transition: background-color var(--duration) var(--ease);
+            border-bottom: 1px solid transparent;
+        }
+
+        .dropdown-item:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .dropdown-item.divider {
+            border-bottom: 1px solid var(--border);
+            cursor: default;
+            padding: 0;
+            margin: 4px 0;
+            min-height: 1px;
+        }
+
+        .dropdown-item.danger {
+            color: var(--danger);
+        }
+
+        /* Context menu styles */
+        .context-menu {
+            display: none;
+            position: fixed;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            min-width: 180px;
+            z-index: 10000;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            animation: slideDown var(--duration) var(--ease);
+        }
+
+        .context-menu.active {
+            display: block;
+        }
+
+        .context-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            cursor: pointer;
+            width: 100%;
+            text-align: left;
+            font-size: 12px;
+            transition: background-color var(--duration) var(--ease);
+            border-bottom: 1px solid transparent;
+        }
+
+        .context-menu-item:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .context-menu-item.divider {
+            border-bottom: 1px solid var(--border);
+            cursor: default;
+            padding: 0;
+            margin: 4px 0;
+            min-height: 1px;
+        }
+
+        .context-menu-item.danger {
+            color: var(--danger);
+        }
+
+        @keyframes slideDown {
+            from { transform: translateY(-8px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        /* Editor Tab Styles */
+        .editor-container {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 12px;
+            height: calc(100% - 24px);
+            overflow: hidden;
+        }
+
+        .file-explorer {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .file-tree {
+            font-size: 12px;
+            flex: 1;
+        }
+
+        .file-item {
+            padding: 6px 8px;
+            cursor: pointer;
+            transition: background-color var(--duration) var(--ease);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            user-select: none;
+        }
+
+        .file-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+        }
+
+        .file-item.active {
+            background: rgba(88, 166, 255, 0.15);
+            color: var(--accent);
+        }
+
+        .folder-toggle {
+            width: 16px;
+            text-align: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .file-icon {
+            width: 16px;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .folder-children {
+            margin-left: 12px;
+        }
+
+        .folder-children.hidden {
+            display: none;
+        }
+
+        .editor-main {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .editor-tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-tertiary);
+            padding: 0;
+            overflow-x: auto;
+            height: 36px;
+            flex-shrink: 0;
+        }
+
+        .editor-tab {
+            padding: 8px 12px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 11px;
+            transition: all var(--duration) var(--ease);
+            border-right: 1px solid var(--border);
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            height: 36px;
+        }
+
+        .editor-tab:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+        }
+
+        .editor-tab.active {
+            color: var(--accent);
+            background: rgba(88, 166, 255, 0.1);
+        }
+
+        .editor-tab-close {
+            cursor: pointer;
+            font-size: 10px;
+            opacity: 0.6;
+        }
+
+        .editor-tab-close:hover {
+            opacity: 1;
+        }
+
+        .code-editor {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+        }
+
+        .code-input {
+            flex: 1;
+            padding: 12px 12px 12px 48px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            border: none;
+            outline: none;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            resize: none;
+            overflow: auto;
+            z-index: 2;
+        }
+
+        .code-input::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        .chat-panel {
+            position: fixed;
+            bottom: 0;
+            right: 0;
+            width: 320px;
+            height: 400px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px 6px 0 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            z-index: 100;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
+            transition: transform var(--duration) var(--ease);
+            margin: 16px;
+            margin-bottom: 0;
+        }
+
+        .chat-panel.hidden {
+            transform: translateY(100%);
+        }
+
+        .chat-header {
+            padding: 12px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-weight: 600;
+            font-size: 12px;
+            color: var(--text-primary);
+            flex-shrink: 0;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .chat-message {
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+
+        .chat-message.user {
+            background: rgba(88, 166, 255, 0.15);
+            color: var(--accent);
+            align-self: flex-end;
+            max-width: 85%;
+        }
+
+        .chat-message.bot {
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            align-self: flex-start;
+            max-width: 85%;
+        }
+
+        .chat-input-area {
+            padding: 12px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .chat-voice-status {
+            font-size: 11px;
+            color: var(--success);
+            text-align: center;
+            min-height: 14px;
+        }
+
+        .chat-input-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .chat-text-input {
+            flex: 1;
+            padding: 6px 8px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 11px;
+            outline: none;
+        }
+
+        .chat-text-input:focus {
+            border-color: var(--accent);
+        }
+
+        .chat-btn {
+            padding: 6px 10px;
+            background: var(--accent);
+            color: var(--bg-primary);
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 500;
+            transition: all var(--duration) var(--ease);
+        }
+
+        .chat-btn:hover {
+            background: var(--accent-hover);
+        }
+
+        .mic-btn {
+            padding: 6px 10px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 10px;
+            color: var(--text-primary);
+            transition: all var(--duration) var(--ease);
+        }
+
+        .mic-btn:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--border-light);
+        }
+
+        .mic-btn.recording {
+            background: rgba(248, 81, 73, 0.2);
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
+        .line-numbers {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 40px;
+            height: 100%;
+            background: var(--bg-tertiary);
+            border-right: 1px solid var(--border);
+            padding: 12px 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text-tertiary);
+            overflow: hidden;
+            pointer-events: none;
+            text-align: right;
+        }
+
+        @media (max-width: 768px) {
+            .editor-container {
+                grid-template-columns: 1fr;
+            }
+
+            .file-explorer {
+                display: none;
+            }
+
+            .chat-panel {
+                width: calc(100vw - 32px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Header -->
+    <div class="top-header">
+        <div class="header-left">
+            <div class="logo-icon">GH</div>
+            <div class="app-title">GitHub Manager</div>
+        </div>
+        <div class="header-right">
+            <div class="search-box">
+                <span>🔍</span>
+                <input type="text" placeholder="Поиск репо...">
+            </div>
+            <div class="header-icons">
+                <button class="icon-btn" title="Уведомления" oncontextmenu="showContextMenu(event, 'notifications')">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M8 1v1M3 5c0-1.66 1.34-3 3-3s3 1.34 3 3v4l2 2H1l2-2V5Z"/>
+                        <path d="M6 14h4c0 .55-.45 1-1 1h-2c-.55 0-1-.45-1-1Z"/>
+                        <circle cx="9" cy="4" r="1.5" fill="currentColor"/>
+                    </svg>
+                </button>
+                <button class="icon-btn" title="Справка" oncontextmenu="showContextMenu(event, 'help')">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="8" cy="8" r="7"/>
+                        <text x="8" y="10" text-anchor="middle" font-size="9" font-weight="bold" fill="currentColor">?</text>
+                    </svg>
+                </button>
+                <div class="user-menu">
+                    <div class="user-avatar" id="userAvatarBtn">УП</div>
+                    <div class="dropdown-menu" id="userDropdown">
+                        <div style="padding: 12px 16px; border-bottom: 1px solid var(--border);">
+                            <div style="font-weight: 600; color: var(--text-primary); font-size: 12px;">user@example.com</div>
+                            <div style="font-size: 11px; color: var(--text-secondary);">Пользователь</div>
+                        </div>
+                        <button class="dropdown-item" onclick="showModal('profile')">👤 Профиль</button>
+                        <button class="dropdown-item" onclick="showModal('settings')">⚙️ Настройки аккаунта</button>
+                        <button class="dropdown-item divider"></button>
+                        <button class="dropdown-item" onclick="showModal('org')">🏢 Организации</button>
+                        <button class="dropdown-item divider"></button>
+                        <button class="dropdown-item danger" onclick="logout()">🚪 Выход</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auth Modal -->
+    <div class="modal" id="authModal">
+        <div class="modal-content" style="position: relative;">
+            <button class="modal-close" onclick="closeModal('auth')">✕</button>
+            <div class="modal-header">
+                <div class="modal-title">Вход в GitHub</div>
+                <div class="modal-subtitle">Используйте ваши данные GitHub для входа</div>
+            </div>
+            <div style="margin-bottom: 24px;">
+                <div class="form-group">
+                    <label class="form-label">Адрес электронной почты или имя пользователя</label>
+                    <input type="text" class="form-input" placeholder="user@example.com">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Пароль</label>
+                    <input type="password" class="form-input" placeholder="••••••••">
+                </div>
+                <button class="btn btn-primary" style="width: 100%; margin-top: 16px;" onclick="loginUser()">Войти</button>
+                <div style="text-align: center; margin-top: 16px; font-size: 12px;">
+                    <span style="color: var(--text-secondary);">Нет аккаунта? </span>
+                    <button style="background: none; border: none; color: var(--accent); cursor: pointer; padding: 0;" onclick="switchModal('auth', 'register')">Зарегистрироваться</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Registration Modal -->
+    <div class="modal" id="registerModal">
+        <div class="modal-content" style="position: relative;">
+            <button class="modal-close" onclick="closeModal('register')">✕</button>
+            <div class="modal-header">
+                <div class="modal-title">Регистрация</div>
+                <div class="modal-subtitle">Создайте новый аккаунт GitHub</div>
+            </div>
+            <div style="margin-bottom: 24px;">
+                <div class="form-group">
+                    <label class="form-label">Имя пользователя</label>
+                    <input type="text" class="form-input" placeholder="johndoe">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Адрес электронной почты</label>
+                    <input type="email" class="form-input" placeholder="user@example.com">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Пароль</label>
+                    <input type="password" class="form-input" placeholder="••••••••">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Подтверждение пароля</label>
+                    <input type="password" class="form-input" placeholder="••••••••">
+                </div>
+                <button class="btn btn-primary" style="width: 100%; margin-top: 16px;" onclick="registerUser()">Создать аккаунт</button>
+                <div style="text-align: center; margin-top: 16px; font-size: 12px;">
+                    <span style="color: var(--text-secondary);">Уже есть аккаунт? </span>
+                    <button style="background: none; border: none; color: var(--accent); cursor: pointer; padding: 0;" onclick="switchModal('register', 'auth')">Войти</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Modal -->
+    <div class="modal" id="profileModal">
+        <div class="modal-content" style="position: relative;">
+            <button class="modal-close" onclick="closeModal('profile')">✕</button>
+            <div class="modal-header">
+                <div class="modal-title">Профиль пользователя</div>
+            </div>
+            <div style="margin-bottom: 24px;">
+                <div style="text-align: center; margin-bottom: 24px;">
+                    <div class="user-avatar" style="width: 64px; height: 64px; font-size: 28px; margin: 0 auto 12px;">УП</div>
+                    <div style="font-weight: 600; color: var(--text-primary);">user@example.com</div>
+                    <div style="font-size: 12px; color: var(--text-secondary);">Присоединился 2 года назад</div>
+                </div>
+                <div class="card">
+                    <div style="margin-bottom: 12px;">
+                        <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 8px;">Статистика</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 6px;">
+                                <div style="font-size: 18px; font-weight: 600; color: var(--accent);">42</div>
+                                <div style="font-size: 11px; color: var(--text-secondary);">Репозитории</div>
+                            </div>
+                            <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 6px;">
+                                <div style="font-size: 18px; font-weight: 600; color: var(--success);">156</div>
+                                <div style="font-size: 11px; color: var(--text-secondary);">Followers</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <button class="btn" style="width: 100%; margin-top: 16px;">Редактировать профиль</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="github-logo">ГХ</div>
+                <div class="sidebar-title">Репозитории</div>
+            </div>
+            
+            <div class="repos-section">
+                <button class="repo-item active" data-repo="main">
+                    main-project
+                </button>
+                <button class="repo-item" data-repo="api">
+                    api-service
+                </button>
+                <button class="repo-item" data-repo="frontend">
+                    frontend-app
+                </button>
+                <button class="repo-item" data-repo="docs">
+                    documentation
+                </button>
+            </div>
+
+            <div class="sidebar-footer">
+                <button class="btn" style="flex: 1; font-size: 11px; padding: 6px 8px;">
+                    Добавить репо
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main content -->
+        <div class="main-content">
+            <!-- Header -->
+            <div class="header">
+                <div class="header-title">main-project</div>
+                <div class="header-actions">
+                    <button class="btn">Синхронизировать</button>
+                    <button class="btn btn-primary">Подключить к GitHub</button>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" data-tab="dashboard">Панель</button>
+                <button class="tab" data-tab="branches">Ветки</button>
+                <button class="tab" data-tab="pullrequests">Pull Requests</button>
+                <button class="tab" data-tab="merges">Слияния</button>
+                <button class="tab" data-tab="actions">Actions</button>
+                <button class="tab" data-tab="editor">Редактор</button>
+                <button class="tab" data-tab="settings">Настройки</button>
+                <button class="tab" data-tab="information">Информация</button>
+                <button class="tab" data-tab="analytics">Аналитика</button>
+                <button class="tab" data-tab="integrations">Интеграции</button>
+            </div>
+
+            <!-- Content -->
+            <div class="content">
+                <!-- Dashboard Tab -->
+                <div class="tab-content active" id="dashboard">
+                    <div class="section">
+                        <div class="section-title">Обзор</div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                            <div class="card" style="padding: 20px; text-align: center;">
+                                <div style="font-size: 28px; font-weight: 600; color: var(--accent); margin-bottom: 8px;">4</div>
+                                <div style="font-size: 12px; color: var(--text-secondary);">Открытых Pull Requests</div>
+                            </div>
+                            <div class="card" style="padding: 20px; text-align: center;">
+                                <div style="font-size: 28px; font-weight: 600; color: var(--success); margin-bottom: 8px;">12</div>
+                                <div style="font-size: 12px; color: var(--text-secondary);">Активных веток</div>
+                            </div>
+                            <div class="card" style="padding: 20px; text-align: center;">
+                                <div style="font-size: 28px; font-weight: 600; color: var(--warning); margin-bottom: 8px;">3</div>
+                                <div style="font-size: 12px; color: var(--text-secondary);">Issues</div>
+                            </div>
+                            <div class="card" style="padding: 20px; text-align: center;">
+                                <div style="font-size: 28px; font-weight: 600; color: var(--accent); margin-bottom: 8px;">156</div>
+                                <div style="font-size: 12px; color: var(--text-secondary);">Commits</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">Последняя активность</div>
+                        <div class="pr-list">
+                            <div class="pr-item">
+                                <div class="pr-header">
+                                    <div class="pr-title">Fix: authentication bug</div>
+                                    <span class="badge badge-success">✓ Merged</span>
+                                </div>
+                                <div class="pr-meta">merged 3 часа назад</div>
+                            </div>
+                            <div class="pr-item">
+                                <div class="pr-header">
+                                    <div class="pr-title">Feat: new dashboard UI</div>
+                                    <span class="badge" style="background: rgba(63, 185, 80, 0.1); color: var(--success);">Ready</span>
+                                </div>
+                                <div class="pr-meta">обновлено 1 час назад</div>
+                            </div>
+                            <div class="pr-item">
+                                <div class="pr-header">
+                                    <div class="pr-title">Docs: update README</div>
+                                    <span class="badge" style="background: rgba(217, 119, 6, 0.1); color: var(--warning);">Review</span>
+                                </div>
+                                <div class="pr-meta">открыто 2 часа назад</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Branches Tab -->
+                <div class="tab-content" id="branches">
+                    <div class="section">
+                        <div class="section-title">Основная ветка</div>
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-title">main</div>
+                                <span class="badge badge-success">По умолчанию</span>
+                            </div>
+                            <div class="branch-meta">Последний commit: 2 часа назад • 156 commits впереди</div>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">Активные ветки</div>
+                        <div class="branch-list">
+                            <div class="branch-item">
+                                <div class="branch-info">
+                                    <div>
+                                        <div class="branch-name">feature/new-ui</div>
+                                        <div class="branch-meta">Обновлено 4 часа назад</div>
+                                    </div>
+                                </div>
+                                <div class="branch-actions">
+                                    <button class="btn" style="padding: 4px 8px; font-size: 11px;">Просмотр</button>
+                                    <button class="btn btn-danger" style="padding: 4px 8px; font-size: 11px;">Удалить</button>
+                                </div>
+                            </div>
+
+                            <div class="branch-item">
+                                <div class="branch-info">
+                                    <div>
+                                        <div class="branch-name">develop</div>
+                                        <div class="branch-meta">Обновлено 1 день назад</div>
+                                    </div>
+                                </div>
+                                <div class="branch-actions">
+                                    <button class="btn" style="padding: 4px 8px; font-size: 11px;">View</button>
+                                    <button class="btn btn-danger" style="padding: 4px 8px; font-size: 11px;">Delete</button>
+                                </div>
+                            </div>
+
+                            <div class="branch-item">
+                                <div class="branch-info">
+                                    <div>
+                                        <div class="branch-name">bugfix/auth-issue</div>
+                                        <div class="branch-meta">Обновлено 3 дня назад</div>
+                                    </div>
+                                </div>
+                                <div class="branch-actions">
+                                    <button class="btn" style="padding: 4px 8px; font-size: 11px;">View</button>
+                                    <button class="btn btn-danger" style="padding: 4px 8px; font-size: 11px;">Delete</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">Создать ветку</div>
+                        <div class="card">
+                            <div class="form-group">
+                                <label class="form-label">Имя ветки</label>
+                                <input type="text" class="form-input" placeholder="feature/my-feature">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">От ветки</label>
+                                <select class="form-select">
+                                    <option>main</option>
+                                    <option>develop</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-primary">Создать ветку</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pull Requests Tab -->
+                <div class="tab-content" id="pullrequests">
+                    <div class="section">
+                        <div class="section-title">Открытые Pull Requests</div>
+                        <div class="pr-list">
+                            <div class="pr-item">
+                                <div class="pr-header">
+                                    <div class="pr-title">#24 Implement user authentication</div>
+                                    <span class="badge" style="background: rgba(63, 185, 80, 0.1); color: var(--success);">Ready to merge</span>
+                                </div>
+                                <div class="pr-meta">
+                                    открыт пользователем • 2 дня назад
+                                </div>
+                                <div class="pr-meta">
+                                    feature/auth → main
+                                </div>
+                                <div class="pr-status">
+                                    <span class="badge badge-success">✓ Проверки: 2/2</span>
+                                    <span class="badge badge-success">✓ Проверки пройдены</span>
+                                </div>
+                            </div>
+
+                            <div class="pr-item">
+                                <div class="pr-header">
+                                    <div class="pr-title">#23 Update documentation</div>
+                                    <span class="badge" style="background: rgba(217, 119, 6, 0.1); color: var(--warning);">Pending review</span>
+                                </div>
+                                <div class="pr-meta">
+                                    открыт пользователем • 5 часов назад
+                                </div>
+                                <div class="pr-meta">
+                                    docs/update → main
+                                </div>
+                                <div class="pr-status">
+                                    <span class="badge">↻ Проверки: 1/2</span>
+                                    <span class="badge badge-success">✓ Проверки пройдены</span>
+                                </div>
+                            </div>
+
+                            <div class="pr-item">
+                                <div class="pr-header">
+                                    <div class="pr-title">#22 Fix login form validation</div>
+                                    <span class="badge badge-danger">Changes requested</span>
+                                </div>
+                                <div class="pr-meta">
+                                    открыт пользователем • 1 день назад
+                                </div>
+                                <div class="pr-meta">
+                                    bugfix/form-validation → develop
+                                </div>
+                                <div class="pr-status">
+                                    <span class="badge badge-danger">✗ Нужны изменения</span>
+                                    <span class="badge badge-danger">✗ Проверки не прошли</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">Создать Pull Request</div>
+                        <div class="card">
+                            <div class="form-group">
+                                <label class="form-label">От ветки (источник)</label>
+                                <select class="form-select">
+                                    <option>feature/new-ui</option>
+                                    <option>develop</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">К ветке (цель)</label>
+                                <select class="form-select">
+                                    <option>main</option>
+                                    <option>develop</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Название</label>
+                                <input type="text" class="form-input" placeholder="Краткое описание изменений">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Описание</label>
+                                <textarea class="form-textarea" placeholder="Подробное описание изменений..."></textarea>
+                            </div>
+                            <button class="btn btn-primary">Создать Pull Request</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Merges Tab -->
+                <div class="tab-content" id="merges">
+                    <div class="section">
+                        <div class="section-title">Стратегия слияния</div>
+                        <div class="card">
+                            <div class="form-group">
+                                <label class="form-label">Способ слияния по умолчанию</label>
+                                <select class="form-select">
+                                    <option>Merge commit (по умолчанию)</option>
+                                    <option>Squash and merge</option>
+                                    <option>Rebase and merge</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="display: flex; align-items: center; margin-top: 16px;">
+                                <label class="form-label" style="margin-bottom: 0; flex: 1;">Автоудаление веток</label>
+                                <div class="toggle"></div>
+                            </div>
+                            <div class="form-group" style="display: flex; align-items: center;">
+                                <label class="form-label" style="margin-bottom: 0; flex: 1;">Требовать сообщение commit</label>
+                                <div class="toggle enabled"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">Защищённые ветки</div>
+                        <div class="branch-list">
+                            <div class="branch-item">
+                                <div class="branch-info">
+                                    <div>
+                                        <div class="branch-name">main</div>
+                                        <div class="branch-meta">Требует 2 проверки • Требует статус-проверок</div>
+                                    </div>
+                                </div>
+                                <button class="btn" style="padding: 4px 8px; font-size: 11px;">Настроить</button>
+                            </div>
+
+                            <div class="branch-item">
+                                <div class="branch-info">
+                                    <div>
+                                        <div class="branch-name">develop</div>
+                                        <div class="branch-meta">Требует 1 проверку</div>
+                                    </div>
+                                </div>
+                                <button class="btn" style="padding: 4px 8px; font-size: 11px;">Настроить</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">Правила защиты веток</div>
+                        <div class="card">
+                            <div class="form-group">
+                                <label class="form-label">Применить к ветке</label>
+                                <input type="text" class="form-input" placeholder="напр., main, release/*">
+                            </div>
+                            <div class="form-group" style="display: flex; align-items: center;">
+                                <label class="form-label" style="margin-bottom: 0; flex: 1;">Требовать проверку Pull Request</label>
+                                <div class="toggle enabled"></div>
+                            </div>
+                            <div class="form-group" style="display: flex; align-items: center;">
+                                <label class="form-label" style="margin-bottom: 0; flex: 1;">Требовать прохождение статус-проверок</label>
+                                <div class="toggle enabled"></div>
+                            </div>
+                            <div class="form-group" style="display: flex; align-items: center;">
+                                <label class="form-label" style="margin-bottom: 0; flex: 1;">Требовать разрешение обсуждений</label>
+                                <div class="toggle"></div>
+                            </div>
+                            <button class="btn btn-primary">Сохранить правила</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Actions Tab -->
+                <div class="tab-content" id="actions">
+                    <div class="section">
+                        <div class="section-title">GitHub Actions</div>
+                        <div class="card">
+                            <div style="text-align: center; padding: 24px;">
+                                <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 16px;">Workflows для автоматизации</div>
+                                <button class="btn btn-primary">Создать новый Workflow</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">Последние запуски</div>
+                        <div class="branch-list">
+                            <div class="branch-item">
+                                <div class="branch-info">
+                                    <div>
+                                        <div class="branch-name">Build and Test</div>
+                                        <div class="branch-meta">Успешно 2 часа назад</div>
+                                    </div>
+                                </div>
+                                <span class="badge badge-success">✓ Success</span>
+                            </div>
+                            <div class="branch-item">
+                                <div class="branch-info">
+                                    <div>
+                                        <div class="branch-name">Lint Code</div>
+                                        <div class="branch-meta">Успешно 1 час назад</div>
+                                    </div>
+                                </div>
+                                <span class="badge badge-success">✓ Success</span>
+                            </div>
+                            <div class="branch-item">
+                                <div class="branch-info">
+                                    <div>
+                                        <div class="branch-name">Deploy Production</div>
+                                        <div class="branch-meta">Ошибка 30 минут назад</div>
+                                    </div>
+                                </div>
+                                <span class="badge badge-danger">✗ Failed</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Wiki Tab -->
+                <div class="tab-content" id="wiki">
+                    <div class="section">
+                        <div class="section-title">Wiki - Документация</div>
+                        <div class="card">
+                            <div style="margin-bottom: 16px;">
+                                <button class="btn btn-primary">Новая страница</button>
+                            </div>
+                            <div class="branch-list">
+                                <div class="branch-item">
+                                    <div class="branch-info">
+                                        <div>
+                                            <div class="branch-name">Home</div>
+                                            <div class="branch-meta">Отредактировано 1 неделю назад</div>
+                                        </div>
+                                    </div>
+                                    <button class="btn" style="padding: 4px 8px; font-size: 11px;">Изменить</button>
+                                </div>
+                                <div class="branch-item">
+                                    <div class="branch-info">
+                                        <div>
+                                            <div class="branch-name">Installation Guide</div>
+                                            <div class="branch-meta">Отредактировано 2 недели назад</div>
+                                        </div>
+                                    </div>
+                                    <button class="btn" style="padding: 4px 8px; font-size: 11px;">Изменить</button>
+                                </div>
+                                <div class="branch-item">
+                                    <div class="branch-info">
+                                        <div>
+                                            <div class="branch-name">API Documentation</div>
+                                            <div class="branch-meta">Отредактировано 3 недели назад</div>
+                                        </div>
+                                    </div>
+                                    <button class="btn" style="padding: 4px 8px; font-size: 11px;">Изменить</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Editor Tab -->
+                <div class="tab-content" id="editor">
+                    <div class="editor-container">
+                        <!-- File Explorer -->
+                        <div class="file-explorer">
+                            <div style="padding: 12px; border-bottom: 1px solid var(--border); display: flex; gap: 6px;">
+                                <input type="text" id="fileSearch" placeholder="Поиск..." style="flex: 1; padding: 6px 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 11px; outline: none;">
+                                <button class="btn" style="padding: 6px 8px; font-size: 10px;" onclick="createNewFile()">+ Новый</button>
+                                <button class="btn" style="padding: 6px 8px; font-size: 10px;" onclick="uploadRepository()">Загрузить</button>
+                            </div>
+                            <div class="file-tree" id="fileTree" style="padding: 12px; overflow-y: auto; flex: 1;">
+                                <!-- Files will be loaded dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Code Editor -->
+                        <div class="editor-main">
+                            <div class="editor-tabs" id="editorTabs">
+                                <!-- Tabs will be created dynamically -->
+                            </div>
+                            <div class="code-editor">
+                                <div class="line-numbers" id="lineNumbers"></div>
+                                <textarea class="code-input" id="codeInput" placeholder="Откройте файл для редактирования"></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Chat Panel (Collapsible) -->
+                        <div class="chat-panel" id="chatPanel">
+                            <div class="chat-header">
+                                <span>Помощник</span>
+                                <button class="icon-btn" style="width: 24px; height: 24px; padding: 0;" onclick="toggleChatPanel()" title="Закрыть">✕</button>
+                            </div>
+                            <div class="chat-messages" id="chatMessages">
+                            </div>
+                            <div class="chat-input-area">
+                                <div class="chat-voice-status" id="voiceStatus"></div>
+                                <div class="chat-input-controls">
+                                    <input type="text" id="chatInput" class="chat-text-input" placeholder="Вопрос...">
+                                    <button class="mic-btn" id="micBtn" title="Микрофон" onclick="toggleMicrophone()">Mic</button>
+                                </div>
+                                <button class="chat-btn" onclick="sendChatMessage()" style="width: 100%;">Отправить</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- GitHub Integration Section -->
+                    <div style="margin-top: 20px; padding: 16px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px;">
+                        <div class="section-title">GitHub интеграция</div>
+                        <div style="margin-top: 12px; display: flex; gap: 12px; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 200px;">
+                                <label class="form-label">GitHub Token</label>
+                                <input type="password" id="githubToken" class="form-input" placeholder="gh_xxxx..." value="">
+                            </div>
+                            <div style="flex: 1; min-width: 200px;">
+                                <label class="form-label">Владелец/Репо</label>
+                                <input type="text" id="repoPath" class="form-input" placeholder="user/repo" value="">
+                            </div>
+                            <div style="display: flex; gap: 8px; align-items: flex-end;">
+                                <button class="btn btn-primary" onclick="loadRepository()">Загрузить репо</button>
+                                <button class="btn" onclick="initLocalRepo()">Локальный</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings Tab -->
+                <div class="tab-content" id="settings">
+                    <div class="section">
+                        <div class="section-title">Интеграция с GitHub</div>
+                        <div class="card">
+                            <div class="form-group">
+                                <label class="form-label">GitHub Token</label>
+                                <input type="password" class="form-input" placeholder="gh_xxxxxxxxxxxx" value="gh_••••••••••••••••••">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">URL репозитория</label>
+                                <input type="text" class="form-input" value="https://github.com/user/main-project" readonly>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn btn-primary">Проверить соединение</button>
+                                <button class="btn">Обновить Token</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">Настройки репозитория</div>
+                        <div class="card">
+                            <div class="form-group">
+                                <label class="form-label">Имя репозитория</label>
+                                <input type="text" class="form-input" value="main-project">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Описание</label>
+                                <textarea class="form-textarea">Основной репозиторий проекта</textarea>
+                            </div>
+                            <div class="form-group" style="display: flex; align-items: center;">
+                                <label class="form-label" style="margin-bottom: 0; flex: 1;">Закрытый репозиторий</label>
+                                <div class="toggle"></div>
+                            </div>
+                            <button class="btn btn-primary">Сохранить изменения</button>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">Уведомления</div>
+                        <div class="card">
+                            <div class="form-group" style="display: flex; align-items: center;">
+                                <label class="form-label" style="margin-bottom: 0; flex: 1;">Уведомлять о Pull Requests</label>
+                                <div class="toggle enabled"></div>
+                            </div>
+                            <div class="form-group" style="display: flex; align-items: center;">
+                                <label class="form-label" style="margin-bottom: 0; flex: 1;">Уведомлять о слияниях</label>
+                                <div class="toggle enabled"></div>
+                            </div>
+                            <div class="form-group" style="display: flex; align-items: center;">
+                                <label class="form-label" style="margin-bottom: 0; flex: 1;">Уведомлять об ошибках проверок</label>
+                                <div class="toggle"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">Опасная зона</div>
+                        <div class="card" style="border-color: rgba(248, 81, 73, 0.3);">
+                            <div style="margin-bottom: 16px;">
+                                <div class="form-label" style="color: var(--danger); margin-bottom: 4px;">Отключить репозиторий</div>
+                                <div style="font-size: 12px; color: var(--text-secondary);">Удалить этот репозиторий из менеджера. Это действие нельзя отменить.</div>
+                            </div>
+                            <button class="btn btn-danger">Отключить</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Information Tab -->
+                <div class="tab-content" id="information">
+                    <div class="section">
+                        <div class="section-title">Wiki - Документация</div>
+                        <div class="card">
+                            <div style="margin-bottom: 16px;">
+                                <button class="btn btn-primary">Новая страница</button>
+                            </div>
+                            <div class="branch-list">
+                                <div class="branch-item">
+                                    <div class="branch-info">
+                                        <div>
+                                            <div class="branch-name">Home</div>
+                                            <div class="branch-meta">Отредактировано 1 неделю назад</div>
+                                        </div>
+                                    </div>
+                                    <button class="btn" style="padding: 4px 8px; font-size: 11px;">Изменить</button>
+                                </div>
+                                <div class="branch-item">
+                                    <div class="branch-info">
+                                        <div>
+                                            <div class="branch-name">Installation Guide</div>
+                                            <div class="branch-meta">Отредактировано 2 недели назад</div>
+                                        </div>
+                                    </div>
+                                    <button class="btn" style="padding: 4px 8px; font-size: 11px;">Изменить</button>
+                                </div>
+                                <div class="branch-item">
+                                    <div class="branch-info">
+                                        <div>
+                                            <div class="branch-name">API Documentation</div>
+                                            <div class="branch-meta">Отредактировано 3 недели назад</div>
+                                        </div>
+                                    </div>
+                                    <button class="btn" style="padding: 4px 8px; font-size: 11px;">Изменить</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">О репозитории</div>
+                        <div class="card">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                                <div>
+                                    <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 8px;">Статистика</div>
+                                    <div style="font-size: 16px; font-weight: 600; color: var(--text-primary);">42</div>
+                                    <div style="font-size: 12px; color: var(--text-secondary);">Репозитории</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 8px;">Активность</div>
+                                    <div style="font-size: 16px; font-weight: 600; color: var(--success);">156</div>
+                                    <div style="font-size: 12px; color: var(--text-secondary);">Commits</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Analytics Tab -->
+                <div class="tab-content" id="analytics">
+                </div>
+
+                <!-- Integrations Tab -->
+                <div class="tab-content" id="integrations">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div class="context-menu" id="contextMenu">
+        <div class="context-menu-title" style="padding: 10px 14px; font-weight: 600; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-primary);"></div>
+        <div class="context-menu-items" style="padding: 6px 0;"></div>
+    </div>
+
+    <script>
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                const tabName = this.getAttribute('data-tab');
+                
+                // Remove active class from all tabs and contents
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                // Add active class to clicked tab and corresponding content
+                this.classList.add('active');
+                document.getElementById(tabName).classList.add('active');
+            });
+        });
+
+        // Repository switching
+        document.querySelectorAll('.repo-item').forEach(repo => {
+            repo.addEventListener('click', function() {
+                document.querySelectorAll('.repo-item').forEach(r => r.classList.remove('active'));
+                this.classList.add('active');
+                
+                const repoName = this.getAttribute('data-repo');
+                document.querySelector('.header-title').textContent = this.textContent;
+            });
+        });
+
+        // Toggle switches
+        document.querySelectorAll('.toggle').forEach(toggle => {
+            toggle.addEventListener('click', function() {
+                this.classList.toggle('enabled');
+            });
+        });
+
+        // Form interactions
+        document.querySelectorAll('input[type="text"], textarea, select').forEach(input => {
+            input.addEventListener('focus', function() {
+                this.parentElement.style.opacity = '1';
+            });
+        });
+
+        // Button actions
+        document.querySelectorAll('.btn-primary').forEach(btn => {
+            btn.addEventListener('click', function() {
+                if (!this.getAttribute('disabled')) {
+                    this.style.opacity = '0.8';
+                    setTimeout(() => {
+                        this.style.opacity = '1';
+                    }, 100);
+                }
+            });
+        });
+
+        // Smooth animations on page load
+        window.addEventListener('load', () => {
+            document.querySelectorAll('.card, .branch-item, .pr-item').forEach((el, index) => {
+                el.style.opacity = '0.8';
+                el.style.animation = `fadeIn 0.3s ease-out ${index * 50}ms forwards`;
+            });
+        });
+
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes fadeIn {
+                to {
+                    opacity: 1;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Modal management
+        function showModal(modalType) {
+            closeAllModals();
+            document.getElementById(modalType + 'Modal').classList.add('active');
+        }
+
+        function closeModal(modalType) {
+            document.getElementById(modalType + 'Modal').classList.remove('active');
+        }
+
+        function closeAllModals() {
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.classList.remove('active');
+            });
+        }
+
+        function switchModal(fromModal, toModal) {
+            closeModal(fromModal);
+            showModal(toModal);
+        }
+
+        // User dropdown menu
+        document.getElementById('userAvatarBtn').addEventListener('click', function(e) {
+            e.stopPropagation();
+            document.getElementById('userDropdown').classList.toggle('active');
+        });
+
+        document.addEventListener('click', function() {
+            document.getElementById('userDropdown').classList.remove('active');
+        });
+
+        document.getElementById('userDropdown').addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+
+        // Close modals on background click
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    this.classList.remove('active');
+                }
+            });
+        });
+
+        // Context menu management
+        function showContextMenu(event, menuType) {
+            event.preventDefault();
+            closeContextMenu();
+            
+            const menu = document.getElementById('contextMenu');
+            menu.classList.add('active');
+            
+            // Position menu at mouse cursor
+            let x = event.clientX;
+            let y = event.clientY;
+            
+            // Adjust if menu goes off-screen
+            const menuRect = menu.getBoundingClientRect();
+            if (x + menuRect.width > window.innerWidth) {
+                x = window.innerWidth - menuRect.width - 10;
+            }
+            if (y + menuRect.height > window.innerHeight) {
+                y = window.innerHeight - menuRect.height - 10;
+            }
+            
+            menu.style.left = x + 'px';
+            menu.style.top = y + 'px';
+            
+            // Update menu content based on type
+            const title = menu.querySelector('.context-menu-title');
+            const itemsContainer = menu.querySelector('.context-menu-items');
+            
+            let items = [];
+            if (menuType === 'notifications') {
+                title.textContent = 'Уведомления';
+                items = [
+                    { label: '🔔 Отметить все как прочитанные', action: 'markAllRead' },
+                    { label: '⚙️ Настройки уведомлений', action: 'notificationSettings' },
+                    { divider: true },
+                    { label: '❌ Очистить историю', action: 'clearHistory', danger: true }
+                ];
+            } else if (menuType === 'help') {
+                title.textContent = 'Справка';
+                items = [
+                    { label: '📖 Документация', action: 'openDocs' },
+                    { label: '❓ FAQ', action: 'openFaq' },
+                    { label: '🐛 Сообщить об ошибке', action: 'reportBug' },
+                    { divider: true },
+                    { label: '🔗 О приложении', action: 'aboutApp' }
+                ];
+            }
+            
+            // Render menu items
+            itemsContainer.innerHTML = '';
+            items.forEach(item => {
+                if (item.divider) {
+                    const divider = document.createElement('div');
+                    divider.className = 'context-menu-item divider';
+                    itemsContainer.appendChild(divider);
+                } else {
+                    const btn = document.createElement('button');
+                    btn.className = 'context-menu-item' + (item.danger ? ' danger' : '');
+                    btn.textContent = item.label;
+                    btn.onclick = () => {
+                        handleContextMenuAction(item.action, menuType);
+                        closeContextMenu();
+                    };
+                    itemsContainer.appendChild(btn);
+                }
+            });
+        }
+
+        function closeContextMenu() {
+            const menu = document.getElementById('contextMenu');
+            menu.classList.remove('active');
+        }
+
+        function handleContextMenuAction(action, menuType) {
+            if (menuType === 'notifications') {
+                switch(action) {
+                    case 'markAllRead':
+                        alert('Все уведомления отмечены как прочитанные');
+                        break;
+                    case 'notificationSettings':
+                        showModal('settings');
+                        break;
+                    case 'clearHistory':
+                        if (confirm('Вы уверены? Это действие нельзя отменить.')) {
+                            alert('История уведомлений очищена');
+                        }
+                        break;
+                }
+            } else if (menuType === 'help') {
+                switch(action) {
+                    case 'openDocs':
+                        alert('Открыть документацию GitHub Manager');
+                        break;
+                    case 'openFaq':
+                        alert('Открыть часто задаваемые вопросы');
+                        break;
+                    case 'reportBug':
+                        alert('Открыть форму для сообщения об ошибке');
+                        break;
+                    case 'aboutApp':
+                        alert('GitHub Manager v1.0.0\nМенеджер репозиториев GitHub');
+                        break;
+                }
+            }
+        }
+
+        // Close context menu when clicking elsewhere
+        document.addEventListener('click', closeContextMenu);
+        document.addEventListener('contextmenu', function(e) {
+            if (e.target.closest('.context-menu')) {
+                e.preventDefault();
+            }
+        });
+
+        // Login function
+        function loginUser() {
+            alert('Вход выполнен успешно!');
+            closeModal('auth');
+        }
+
+        // Register function
+        function registerUser() {
+            alert('Регистрация успешна!');
+            closeModal('register');
+        }
+
+        // Logout function
+        function logout() {
+            document.getElementById('userDropdown').classList.remove('active');
+            alert('Вы вышли из аккаунта');
+            showModal('auth');
+        }
+
+        // Show auth modal on page load (uncomment for testing)
+        // window.addEventListener('load', () => {
+        //     showModal('auth');
+        // });
+
+        // File structure storage
+        let fileSystem = {
+            'src': {
+                type: 'folder',
+                children: {
+                    'index.js': { type: 'file', content: '' },
+                    'api.js': { type: 'file', content: '' },
+                    'utils.js': { type: 'file', content: '' }
+                }
+            },
+            '.gitignore': { type: 'file', content: 'node_modules/\n.env\ndist/' },
+            'package.json': { type: 'file', content: '{\n  "name": "repository",\n  "version": "1.0.0"\n}' }
+        };
+
+        let openTabs = {};
+        let currentFile = null;
+
+        // Initialize file tree on load
+        window.addEventListener('load', function() {
+            renderFileTree();
+            updateLineNumbers();
+        });
+
+        function renderFileTree() {
+            const fileTree = document.getElementById('fileTree');
+            fileTree.innerHTML = '';
+            Object.entries(fileSystem).forEach(([name, item]) => {
+                fileTree.appendChild(createFileElement(name, item, ''));
+            });
+        }
+
+        function createFileElement(name, item, path) {
+            const div = document.createElement('div');
+            if (item.type === 'folder') {
+                div.className = 'file-item';
+                div.innerHTML = `
+                    <span class="folder-toggle">▼</span>
+                    <span class="file-icon">▸</span>
+                    <span>${name}/</span>
+                `;
+                div.onclick = (e) => {
+                    e.stopPropagation();
+                    const children = div.nextElementSibling;
+                    if (children && children.classList.contains('folder-children')) {
+                        children.classList.toggle('hidden');
+                        const toggle = div.querySelector('.folder-toggle');
+                        toggle.textContent = children.classList.contains('hidden') ? '▶' : '▼';
+                    }
+                };
+
+                const childrenDiv = document.createElement('div');
+                childrenDiv.className = 'folder-children';
+                Object.entries(item.children).forEach(([childName, childItem]) => {
+                    const childPath = path ? `${path}/${name}` : name;
+                    childrenDiv.appendChild(createFileElement(childName, childItem, childPath));
+                });
+                div.parentElement?.insertBefore(childrenDiv, div.nextElementSibling);
+                return div;
+            } else {
+                div.className = 'file-item';
+                const fullPath = path ? `${path}/${name}` : name;
+                div.innerHTML = `<span class="file-icon">·</span><span>${name}</span>`;
+                div.onclick = () => openFile(fullPath, name);
+                return div;
+            }
+        }
+
+        function openFile(filePath, fileName) {
+            document.querySelectorAll('.file-item').forEach(item => item.classList.remove('active'));
+            
+            let current = fileSystem;
+            const parts = filePath.split('/');
+            
+            for (let i = 0; i < parts.length - 1; i++) {
+                current = current[parts[i]]?.children || current;
+            }
+            
+            const file = current[parts[parts.length - 1]];
+            if (!file) return;
+
+            currentFile = filePath;
+            const codeInput = document.getElementById('codeInput');
+            codeInput.value = file.content || '';
+            codeInput.dataset.file = filePath;
+
+            updateLineNumbers();
+            addTab(filePath, fileName);
+        }
+
+        function addTab(filePath, fileName) {
+            const tabsContainer = document.getElementById('editorTabs');
+            let tab = document.querySelector(`[data-file="${filePath}"]`);
+            
+            if (!tab) {
+                tab = document.createElement('div');
+                tab.className = 'editor-tab';
+                tab.setAttribute('data-file', filePath);
+                tab.innerHTML = `<span>${fileName}</span><span class="editor-tab-close" onclick="closeTab(event)">✕</span>`;
+                tabsContainer.appendChild(tab);
+            }
+            
+            document.querySelectorAll('.editor-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+        }
+
+        function closeTab(event) {
+            event.stopPropagation();
+            const tab = event.target.closest('.editor-tab');
+            const filePath = tab.getAttribute('data-file');
+            tab.remove();
+            
+            if (currentFile === filePath) {
+                currentFile = null;
+                document.getElementById('codeInput').value = '';
+                updateLineNumbers();
+            }
+        }
+
+        function createNewFile() {
+            const name = prompt('Имя файла:');
+            if (!name) return;
+            
+            fileSystem[name] = { type: 'file', content: '' };
+            renderFileTree();
+        }
+
+        function uploadRepository() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.webkitdirectory = true;
+            input.onchange = async (e) => {
+                const files = Array.from(e.target.files);
+                fileSystem = {};
+                
+                files.forEach(file => {
+                    const parts = file.webkitRelativePath.split('/');
+                    let current = fileSystem;
+                    
+                    for (let i = 0; i < parts.length - 1; i++) {
+                        if (!current[parts[i]]) {
+                            current[parts[i]] = { type: 'folder', children: {} };
+                        }
+                        current = current[parts[i]].children;
+                    }
+                    
+                    const fileName = parts[parts.length - 1];
+                    file.text().then(content => {
+                        current[fileName] = { type: 'file', content };
+                    });
+                });
+                
+                renderFileTree();
+            };
+            input.click();
+        }
+
+        function initLocalRepo() {
+            fileSystem = {
+                'src': {
+                    type: 'folder',
+                    children: {
+                        'index.js': { type: 'file', content: '// Новый файл' },
+                        'api.js': { type: 'file', content: '// API' }
+                    }
+                },
+                '.gitignore': { type: 'file', content: 'node_modules/\n.env' },
+                'README.md': { type: 'file', content: '# Новый репозиторий' },
+                'package.json': { type: 'file', content: '{\n  "name": "my-repo",\n  "version": "1.0.0"\n}' }
+            };
+            renderFileTree();
+        }
+
+        function loadRepository() {
+            const token = document.getElementById('githubToken').value;
+            const repoPath = document.getElementById('repoPath').value;
+            
+            if (!token || !repoPath) {
+                alert('Укажите Token и путь репозитория (user/repo)');
+                return;
+            }
+
+            const [owner, repo] = repoPath.split('/');
+            fetch(`https://api.github.com/repos/${owner}/${repo}/contents`, {
+                headers: { 'Authorization': `token ${token}` }
+            })
+            .then(r => r.json())
+            .then(files => {
+                fileSystem = {};
+                files.forEach(file => {
+                    fileSystem[file.name] = {
+                        type: file.type === 'dir' ? 'folder' : 'file',
+                        content: '',
+                        children: file.type === 'dir' ? {} : undefined
+                    };
+                });
+                renderFileTree();
+            })
+            .catch(e => alert('Ошибка загрузки: ' + e.message));
+        }
+
+        function updateLineNumbers() {
+            const codeInput = document.getElementById('codeInput');
+            const lines = codeInput.value.split('\n').length;
+            const lineNumbers = document.getElementById('lineNumbers');
+            lineNumbers.textContent = Array.from({ length: lines }, (_, i) => i + 1).join('\n');
+        }
+
+        // Chat Functions
+        function toggleChatPanel() {
+            document.getElementById('chatPanel').classList.toggle('hidden');
+        }
+
+        function sendChatMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            const chatMessages = document.getElementById('chatMessages');
+            const userMsg = document.createElement('div');
+            userMsg.className = 'chat-message user';
+            userMsg.textContent = message;
+            chatMessages.appendChild(userMsg);
+
+            setTimeout(() => {
+                const botMsg = document.createElement('div');
+                botMsg.className = 'chat-message bot';
+                botMsg.textContent = 'Сообщение получено.';
+                chatMessages.appendChild(botMsg);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }, 500);
+
+            input.value = '';
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Code Editor Updates
+        document.getElementById('codeInput')?.addEventListener('input', function() {
+            updateLineNumbers();
+            if (currentFile && fileSystem[currentFile]) {
+                fileSystem[currentFile].content = this.value;
+            }
+        });
+
+        // Chat input Enter key
+        document.getElementById('chatInput')?.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendChatMessage();
+            }
+        });
+
+        // Microphone Functions
+        let isRecording = false;
+        let recognition = null;
+
+        function toggleMicrophone() {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                alert('Микрофон не поддерживается');
+                return;
+            }
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!recognition) {
+                recognition = new SpeechRecognition();
+                recognition.lang = 'ru-RU';
+                recognition.continuous = false;
+                recognition.interimResults = true;
+
+                recognition.onstart = () => {
+                    isRecording = true;
+                    const micBtn = document.getElementById('micBtn');
+                    micBtn.classList.add('recording');
+                    document.getElementById('voiceStatus').textContent = 'Слушаю...';
+                };
+
+                recognition.onend = () => {
+                    isRecording = false;
+                    document.getElementById('micBtn').classList.remove('recording');
+                    document.getElementById('voiceStatus').textContent = '';
+                };
+
+                recognition.onresult = (event) => {
+                    let transcript = '';
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        transcript += event.results[i][0].transcript;
+                    }
+                    if (event.results[event.results.length - 1].isFinal) {
+                        document.getElementById('chatInput').value = transcript;
+                    }
+                };
+            }
+
+            if (isRecording) {
+                recognition.stop();
+            } else {
+                recognition.start();
+            }
+        }
+    </script>
+</body>
+</html>
