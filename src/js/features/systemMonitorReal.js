@@ -1,34 +1,34 @@
 /**
  * System Monitor Real - Реальный мониторинг системы в реальном времени
- * Использует systeminformation для получения реальных данных системы
+ * Использует systeminformation для получения реальных данных
  */
 
 class SystemMonitorReal {
     constructor() {
         this.monitoringActive = false;
         this.monitoringInterval = null;
-        this.updateInterval = 2000; // 2 секунды
+        this.updateInterval = 1500;
         this.history = {
             cpu: [],
             mem: [],
             disk: [],
-            maxHistoryLength: 60
+            netRx: [],
+            netTx: [],
+            maxLength: 60
         };
         this.lastUpdate = {};
+        this.charts = {};
     }
 
     init() {
         console.log('[SystemMonitor] Инициализация...');
         this.setupEventListeners();
+        this.renderUI();
         this.startMonitoring();
-        // Первое обновление сразу
         this.updateAllData();
-        // Проверить обновления при запуске
-        setTimeout(() => this.checkForUpdates(), 2000);
     }
 
     setupEventListeners() {
-        // Settings icon navigation
         document.querySelectorAll('.settings-icon-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 this.switchSection(btn.dataset.section);
@@ -37,516 +37,537 @@ class SystemMonitorReal {
     }
 
     switchSection(section) {
-        // Скрыть все секции
-        document.querySelectorAll('.settings-section').forEach(s => {
-            s.classList.remove('active');
-        });
-
-        // Показать выбранную
+        document.querySelectorAll('.settings-section').forEach(s => s.classList.remove('active'));
         const target = document.getElementById(`settings-${section}`);
-        if (target) {
-            target.classList.add('active');
-        }
+        if (target) target.classList.add('active');
 
-        // Обновить активную кнопку
         document.querySelectorAll('.settings-icon-btn').forEach(btn => {
             btn.classList.remove('active');
-            if (btn.dataset.section === section) {
-                btn.classList.add('active');
-            }
+            if (btn.dataset.section === section) btn.classList.add('active');
         });
+    }
+
+    renderUI() {
+        const container = document.getElementById('settings-system');
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="system-monitor-container">
+                <!-- Верхняя панель статуса -->
+                <div class="monitor-header">
+                    <div class="monitor-status">
+                        <span class="status-indicator active"></span>
+                        <span id="monitorStatus">Мониторинг активен</span>
+                    </div>
+                    <div class="monitor-actions">
+                        <button class="monitor-btn" onclick="systemMonitorReal.toggleMonitoring()" id="toggleMonitoring">⏸ Пауза</button>
+                        <button class="monitor-btn" onclick="systemMonitorReal.updateAllData()">↻ Обновить</button>
+                    </div>
+                </div>
+
+                <!-- Основные метрики -->
+                <div class="metrics-grid">
+                    <!-- CPU -->
+                    <div class="metric-card cpu-card" id="cpuCard">
+                        <div class="metric-header">
+                            <span class="metric-icon">💻</span>
+                            <span class="metric-title">CPU</span>
+                            <span class="metric-value" id="cpuLoad">0%</span>
+                        </div>
+                        <div class="metric-chart">
+                            <canvas id="cpuChart" width="300" height="80"></canvas>
+                        </div>
+                        <div class="metric-details" id="cpuDetails">
+                            <div class="detail-row"><span>Ядра</span><span id="cpuCores">-</span></div>
+                            <div class="detail-row"><span>Температура</span><span id="cpuTemp">-</span></div>
+                            <div class="detail-row"><span>Частота</span><span id="cpuSpeed">-</span></div>
+                        </div>
+                        <div class="core-loads" id="coreLoads"></div>
+                    </div>
+
+                    <!-- Memory -->
+                    <div class="metric-card memory-card" id="memoryCard">
+                        <div class="metric-header">
+                            <span class="metric-icon">🧠</span>
+                            <span class="metric-title">Память</span>
+                            <span class="metric-value" id="memPercent">0%</span>
+                        </div>
+                        <div class="metric-chart">
+                            <canvas id="memChart" width="300" height="80"></canvas>
+                        </div>
+                        <div class="metric-details">
+                            <div class="detail-row"><span>Используется</span><span id="memUsed">-</span></div>
+                            <div class="detail-row"><span>Всего</span><span id="memTotal">-</span></div>
+                            <div class="detail-row"><span>Swap</span><span id="memSwap">-</span></div>
+                            <div class="detail-row"><span>Кэш</span><span id="memCached">-</span></div>
+                        </div>
+                        <div class="memory-bar-container">
+                            <div class="memory-bar">
+                                <div class="memory-used" id="memBar" style="width: 0%"></div>
+                                <div class="memory-cached" id="memCacheBar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- GPU -->
+                    <div class="metric-card gpu-card" id="gpuCard">
+                        <div class="metric-header">
+                            <span class="metric-icon">🎮</span>
+                            <span class="metric-title">GPU</span>
+                            <span class="metric-value" id="gpuUsage">-</span>
+                        </div>
+                        <div class="metric-details">
+                            <div class="detail-row"><span>Модель</span><span id="gpuModel">-</span></div>
+                            <div class="detail-row"><span>Производитель</span><span id="gpuBrand">-</span></div>
+                            <div class="detail-row"><span>VRAM</span><span id="gpuVram">-</span></div>
+                            <div class="detail-row"><span>Температура</span><span id="gpuTemp">-</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Disk -->
+                    <div class="metric-card disk-card" id="diskCard">
+                        <div class="metric-header">
+                            <span class="metric-icon">💾</span>
+                            <span class="metric-title">Диск</span>
+                            <span class="metric-value" id="diskPercent">0%</span>
+                        </div>
+                        <div class="metric-details">
+                            <div class="detail-row"><span>Используется</span><span id="diskUsed">-</span></div>
+                            <div class="detail-row"><span>Всего</span><span id="diskTotal">-</span></div>
+                            <div class="detail-row"><span>Чтение</span><span id="diskRead">-</span></div>
+                            <div class="detail-row"><span>Запись</span><span id="diskWrite">-</span></div>
+                        </div>
+                        <div class="volumes-list" id="volumesList"></div>
+                    </div>
+                </div>
+
+                <!-- ОС Информация -->
+                <div class="os-info-panel" id="osInfoPanel">
+                    <div class="os-info-header">💻 Система</div>
+                    <div class="os-info-grid">
+                        <div class="os-item"><span>ОС</span><span id="osName">-</span></div>
+                        <div class="os-item"><span>Версия</span><span id="osVersion">-</span></div>
+                        <div class="os-item"><span>Ядро</span><span id="osKernel">-</span></div>
+                        <div class="os-item"><span>Архитектура</span><span id="osArch">-</span></div>
+                        <div class="os-item"><span>Uptime</span><span id="osUptime">-</span></div>
+                        <div class="os-item"><span>Пользователи</span><span id="osUsers">-</span></div>
+                        <div class="os-item" id="batteryItem" style="display:none"><span>Батарея</span><span id="osBattery">-</span></div>
+                    </div>
+                </div>
+
+                <!-- Процессы -->
+                <div class="processes-panel" id="processesPanel">
+                    <div class="processes-header">
+                        <span>⏱ Процессы</span>
+                        <div class="process-sort">
+                            <select id="processSortSelect" onchange="systemMonitorReal.sortProcesses(this.value)">
+                                <option value="mem">По памяти</option>
+                                <option value="cpu">По CPU</option>
+                                <option value="name">По имени</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="processes-table">
+                        <div class="process-table-header">
+                            <div class="col-name">Имя</div>
+                            <div class="col-pid">PID</div>
+                            <div class="col-cpu">CPU</div>
+                            <div class="col-mem">RAM</div>
+                            <div class="col-user">Пользователь</div>
+                        </div>
+                        <div class="process-list" id="processList"></div>
+                    </div>
+                </div>
+
+                <!-- Драйверы -->
+                <div class="drivers-panel" id="driversPanel">
+                    <div class="drivers-header">
+                        <span>⚙️ Драйверы и устройства</span>
+                        <button class="check-updates-btn" onclick="systemMonitorReal.checkForUpdates()">Проверить обновления</button>
+                    </div>
+                    <div class="drivers-list" id="driversList"></div>
+                </div>
+            </div>
+        `;
+
+        this.initCharts();
+    }
+
+    initCharts() {
+        // CPU Chart
+        const cpuCanvas = document.getElementById('cpuChart');
+        if (cpuCanvas) {
+            this.charts.cpu = {
+                canvas: cpuCanvas,
+                ctx: cpuCanvas.getContext('2d')
+            };
+        }
+
+        // Memory Chart
+        const memCanvas = document.getElementById('memChart');
+        if (memCanvas) {
+            this.charts.mem = {
+                canvas: memCanvas,
+                ctx: memCanvas.getContext('2d')
+            };
+        }
+    }
+
+    drawChart(chartName, data, color) {
+        const chart = this.charts[chartName];
+        if (!chart || !chart.ctx) return;
+
+        const ctx = chart.ctx;
+        const w = chart.canvas.width;
+        const h = chart.canvas.height;
+
+        ctx.clearRect(0, 0, w, h);
+
+        // Фон
+        ctx.fillStyle = 'rgba(30, 30, 40, 0.5)';
+        ctx.fillRect(0, 0, w, h);
+
+        // Сетка
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+        ctx.lineWidth = 1;
+        for (let i = 1; i < 4; i++) {
+            const y = (h / 4) * i;
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(w, y);
+            ctx.stroke();
+        }
+
+        if (data.length < 2) return;
+
+        const maxVal = Math.max(...data, 100);
+        const stepX = w / (this.history.maxLength - 1);
+
+        // Заливка под графиком
+        const gradient = ctx.createLinearGradient(0, 0, 0, h);
+        gradient.addColorStop(0, color + '40');
+        gradient.addColorStop(1, color + '00');
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.moveTo(0, h);
+        data.forEach((val, i) => {
+            const x = i * stepX;
+            const y = h - (val / maxVal) * h * 0.9;
+            if (i === 0) ctx.lineTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+        ctx.lineTo((data.length - 1) * stepX, h);
+        ctx.closePath();
+        ctx.fill();
+
+        // Линия графика
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        data.forEach((val, i) => {
+            const x = i * stepX;
+            const y = h - (val / maxVal) * h * 0.9;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
     }
 
     async updateAllData() {
+        if (!window.ipcRenderer) {
+            console.warn('[SystemMonitor] IPC not available');
+            return;
+        }
+
         try {
-            // CPU
-            const cpuData = await window.ipcRenderer.invoke('get-cpu-info');
-            if (cpuData && cpuData.load !== undefined) {
-                this.updateCPUDisplay(cpuData);
-                this.history.cpu.push(parseFloat(cpuData.load));
-                if (this.history.cpu.length > this.maxHistoryLength) {
-                    this.history.cpu.shift();
-                }
-                this.lastUpdate.cpu = cpuData;
-            }
+            const [cpu, mem, disk, gpu, osInfo, processes, drivers] = await Promise.all([
+                window.ipcRenderer.invoke('get-cpu-info').catch(() => null),
+                window.ipcRenderer.invoke('get-memory-info').catch(() => null),
+                window.ipcRenderer.invoke('get-disk-info').catch(() => null),
+                window.ipcRenderer.invoke('get-gpu-info').catch(() => null),
+                window.ipcRenderer.invoke('get-os-info').catch(() => null),
+                window.ipcRenderer.invoke('get-processes').catch(() => null),
+                window.ipcRenderer.invoke('get-drivers-info').catch(() => null)
+            ]);
 
-            // Memory
-            const memData = await window.ipcRenderer.invoke('get-memory-info');
-            if (memData && memData.percent !== undefined) {
-                this.updateMemoryDisplay(memData);
-                this.history.mem.push(parseFloat(memData.percent));
-                if (this.history.mem.length > this.maxHistoryLength) {
-                    this.history.mem.shift();
-                }
-                this.lastUpdate.mem = memData;
-            }
+            if (cpu) this.updateCPU(cpu);
+            if (mem) this.updateMemory(mem);
+            if (disk) this.updateDisk(disk);
+            if (gpu) this.updateGPU(gpu);
+            if (osInfo) this.updateOS(osInfo);
+            if (processes) this.updateProcesses(processes);
+            if (drivers) this.updateDrivers(drivers);
 
-            // Disk
-            const diskData = await window.ipcRenderer.invoke('get-disk-info');
-            if (diskData && diskData.percent !== undefined) {
-                this.updateDiskDisplay(diskData);
-                this.history.disk.push(parseFloat(diskData.percent));
-                if (this.history.disk.length > this.maxHistoryLength) {
-                    this.history.disk.shift();
-                }
-                this.lastUpdate.disk = diskData;
-            }
-
-            // GPU
-            const gpuData = await window.ipcRenderer.invoke('get-gpu-info');
-            if (gpuData) {
-                this.updateGPUDisplay(gpuData);
-                this.lastUpdate.gpu = gpuData;
-            }
-
-            // OS
-            const osData = await window.ipcRenderer.invoke('get-os-info');
-            if (osData) {
-                this.updateOSDisplay(osData);
-                this.lastUpdate.os = osData;
-            }
-
-            // Processes
-            const procData = await window.ipcRenderer.invoke('get-processes');
-            if (procData) {
-                this.updateProcessesDisplay(procData);
-                this.lastUpdate.processes = procData;
-            }
-
-            // Network
-            const netData = await window.ipcRenderer.invoke('get-network-info');
-            if (netData) {
-                this.updateNetworkDisplay(netData);
-                this.lastUpdate.network = netData;
-            }
-
-            // Drivers
-            const driversData = await window.ipcRenderer.invoke('get-drivers-info');
-            if (driversData) {
-                this.updateDriversDisplay(driversData);
-                this.lastUpdate.drivers = driversData;
-            }
-
-            console.log('[SystemMonitor] Обновление завершено');
         } catch (e) {
-            console.error('[SystemMonitor] Ошибка обновления:', e);
+            console.error('[SystemMonitor] Update error:', e);
         }
     }
 
-    updateCPUDisplay(data) {
-        const cpuSection = document.getElementById('settings-system');
-        if (!cpuSection) return;
-
-        let cpuCard = cpuSection.querySelector('.system-card[data-type="cpu"]');
-        if (!cpuCard) {
-            cpuCard = document.createElement('div');
-            cpuCard.className = 'system-card';
-            cpuCard.setAttribute('data-type', 'cpu');
-            if (!cpuSection.querySelector('.system-cards-grid')) {
-                const grid = document.createElement('div');
-                grid.className = 'system-cards-grid';
-                cpuSection.appendChild(grid);
-            }
-            cpuSection.querySelector('.system-cards-grid').appendChild(cpuCard);
+    updateCPU(data) {
+        const load = parseFloat(data.load) || 0;
+        
+        // Обновить историю
+        this.history.cpu.push(load);
+        if (this.history.cpu.length > this.history.maxLength) {
+            this.history.cpu.shift();
         }
 
-        const progressValue = Math.min(100, Math.max(0, parseFloat(data.load) || 0));
-        cpuCard.innerHTML = `
-            <div class="system-card-header">CPU</div>
-            <div class="system-card-stat">
-                <span class="label">Загрузка</span>
-                <span class="value">${data.load}%</span>
-            </div>
-            <div class="system-card-stat">
-                <span class="label">Ядер</span>
-                <span class="value">${data.cores}</span>
-            </div>
-            <div class="system-card-stat">
-                <span class="label">Температура</span>
-                <span class="value">${parseFloat(data.temp || 0).toFixed(1)}°C</span>
-            </div>
-            <div class="progress-bar">
-                <div class="progress-fill" style="width: ${progressValue}%"></div>
-            </div>
-        `;
-    }
+        // UI
+        this.setText('cpuLoad', `${load}%`);
+        this.setText('cpuCores', `${data.physicalCores || data.cores} / ${data.cores}`);
+        this.setText('cpuTemp', `${data.temp}°C`);
+        this.setText('cpuSpeed', `${data.speed || '-'} GHz`);
 
-    updateMemoryDisplay(data) {
-        const cpuSection = document.getElementById('settings-system');
-        if (!cpuSection) return;
-
-        let memCard = cpuSection.querySelector('.system-card[data-type="memory"]');
-        if (!memCard) {
-            memCard = document.createElement('div');
-            memCard.className = 'system-card';
-            memCard.setAttribute('data-type', 'memory');
-            if (!cpuSection.querySelector('.system-cards-grid')) {
-                const grid = document.createElement('div');
-                grid.className = 'system-cards-grid';
-                cpuSection.appendChild(grid);
-            }
-            cpuSection.querySelector('.system-cards-grid').appendChild(memCard);
-        }
-
-        const progressValue = Math.min(100, Math.max(0, parseFloat(data.percent) || 0));
-        memCard.innerHTML = `
-            <div class="system-card-header">Память</div>
-            <div class="system-card-stat">
-                <span class="label">Используется</span>
-                <span class="value">${data.used} GB / ${data.total} GB</span>
-            </div>
-            <div class="system-card-stat">
-                <span class="label">Загрузка</span>
-                <span class="value">${data.percent}%</span>
-            </div>
-            <div class="progress-bar">
-                <div class="progress-fill" style="width: ${progressValue}%"></div>
-            </div>
-        `;
-    }
-
-    updateDiskDisplay(data) {
-        const cpuSection = document.getElementById('settings-system');
-        if (!cpuSection) return;
-
-        let diskCard = cpuSection.querySelector('.system-card[data-type="disk"]');
-        if (!diskCard) {
-            diskCard = document.createElement('div');
-            diskCard.className = 'system-card';
-            diskCard.setAttribute('data-type', 'disk');
-            if (!cpuSection.querySelector('.system-cards-grid')) {
-                const grid = document.createElement('div');
-                grid.className = 'system-cards-grid';
-                cpuSection.appendChild(grid);
-            }
-            cpuSection.querySelector('.system-cards-grid').appendChild(diskCard);
-        }
-
-        const progressValue = Math.min(100, Math.max(0, parseFloat(data.percent) || 0));
-        diskCard.innerHTML = `
-            <div class="system-card-header">Диск</div>
-            <div class="system-card-stat">
-                <span class="label">Используется</span>
-                <span class="value">${data.used} GB / ${data.total} GB</span>
-            </div>
-            <div class="system-card-stat">
-                <span class="label">Загрузка</span>
-                <span class="value">${data.percent}%</span>
-            </div>
-            <div class="system-card-stat">
-                <span class="label">Дисков</span>
-                <span class="value">${data.disks}</span>
-            </div>
-            <div class="progress-bar">
-                <div class="progress-fill" style="width: ${progressValue}%"></div>
-            </div>
-        `;
-    }
-
-    updateGPUDisplay(data) {
-        const cpuSection = document.getElementById('settings-system');
-        if (!cpuSection) return;
-
-        let gpuCard = cpuSection.querySelector('.system-card[data-type="gpu"]');
-        if (!gpuCard) {
-            gpuCard = document.createElement('div');
-            gpuCard.className = 'system-card';
-            gpuCard.setAttribute('data-type', 'gpu');
-            if (!cpuSection.querySelector('.system-cards-grid')) {
-                const grid = document.createElement('div');
-                grid.className = 'system-cards-grid';
-                cpuSection.appendChild(grid);
-            }
-            cpuSection.querySelector('.system-cards-grid').appendChild(gpuCard);
-        }
-
-        gpuCard.innerHTML = `
-            <div class="system-card-header">GPU</div>
-            <div class="system-card-stat">
-                <span class="label">Бренд</span>
-                <span class="value">${data.brand}</span>
-            </div>
-            <div class="system-card-stat">
-                <span class="label">Модель</span>
-                <span class="value">${data.model}</span>
-            </div>
-            <div class="system-card-stat">
-                <span class="label">VRAM</span>
-                <span class="value">${data.vram} MB</span>
-            </div>
-        `;
-    }
-
-    updateOSDisplay(data) {
-        const cpuSection = document.getElementById('settings-system');
-        if (!cpuSection) return;
-
-        let osCard = cpuSection.querySelector('.system-card[data-type="os"]');
-        if (!osCard) {
-            osCard = document.createElement('div');
-            osCard.className = 'system-card';
-            osCard.setAttribute('data-type', 'os');
-            if (!cpuSection.querySelector('.system-cards-grid')) {
-                const grid = document.createElement('div');
-                grid.className = 'system-cards-grid';
-                cpuSection.appendChild(grid);
-            }
-            cpuSection.querySelector('.system-cards-grid').appendChild(osCard);
-        }
-
-        const uptimeHours = Math.floor((data.uptime || 0) / 3600);
-        const uptimeDays = Math.floor(uptimeHours / 24);
-
-        osCard.innerHTML = `
-            <div class="system-card-header">ОС</div>
-            <div class="system-card-stat">
-                <span class="label">ОС</span>
-                <span class="value">${data.platform} ${data.distro}</span>
-            </div>
-            <div class="system-card-stat">
-                <span class="label">Архитектура</span>
-                <span class="value">${data.arch}</span>
-            </div>
-            <div class="system-card-stat">
-                <span class="label">Ядро</span>
-                <span class="value">${data.kernel}</span>
-            </div>
-            <div class="system-card-stat">
-                <span class="label">Uptime</span>
-                <span class="value">${uptimeDays}д ${uptimeHours % 24}ч</span>
-            </div>
-        `;
-    }
-
-    updateProcessesDisplay(processes) {
-        const cpuSection = document.getElementById('settings-system');
-        if (!cpuSection) return;
-
-        let procCard = cpuSection.querySelector('.system-card[data-type="processes"]');
-        if (!procCard) {
-            procCard = document.createElement('div');
-            procCard.className = 'system-card';
-            procCard.setAttribute('data-type', 'processes');
-            if (!cpuSection.querySelector('.system-cards-grid')) {
-                const grid = document.createElement('div');
-                grid.className = 'system-cards-grid';
-                cpuSection.appendChild(grid);
-            }
-            cpuSection.querySelector('.system-cards-grid').appendChild(procCard);
-        }
-
-        let html = `<div class="system-card-header">Топ процессы</div>`;
-        if (processes && processes.length > 0) {
-            for (const proc of processes.slice(0, 5)) {
-                html += `
-                    <div class="process-item">
-                        <span class="proc-name">${proc.name}</span>
-                        <span class="proc-mem">${proc.mem}MB</span>
+        // Загрузка ядер
+        const coreLoadsEl = document.getElementById('coreLoads');
+        if (coreLoadsEl && data.coreLoads) {
+            coreLoadsEl.innerHTML = data.coreLoads.slice(0, 8).map((load, i) => `
+                <div class="core-load-item">
+                    <span class="core-label">Я${i}</span>
+                    <div class="core-bar">
+                        <div class="core-fill" style="width: ${load}%; background: ${this.getLoadColor(load)}"></div>
                     </div>
-                `;
-            }
-        } else {
-            html += `<div style="padding: 8px 0; color: var(--text-tertiary); font-size: 10px;">Нет данных</div>`;
-        }
-
-        procCard.innerHTML = html;
-    }
-
-    updateNetworkDisplay(data) {
-        const cpuSection = document.getElementById('settings-system');
-        if (!cpuSection) return;
-
-        let netCard = cpuSection.querySelector('.system-card[data-type="network"]');
-        if (!netCard) {
-            netCard = document.createElement('div');
-            netCard.className = 'system-card';
-            netCard.setAttribute('data-type', 'network');
-            if (!cpuSection.querySelector('.system-cards-grid')) {
-                const grid = document.createElement('div');
-                grid.className = 'system-cards-grid';
-                cpuSection.appendChild(grid);
-            }
-            cpuSection.querySelector('.system-cards-grid').appendChild(netCard);
-        }
-
-        netCard.innerHTML = `
-            <div class="system-card-header">Сеть</div>
-            <div class="system-card-stat">
-                <span class="label">Интерфейсов</span>
-                <span class="value">${data.interfaces}</span>
-            </div>
-            <div class="system-card-stat">
-                <span class="label">Общая скорость</span>
-                <span class="value">${data.totalSpeed} Mbps</span>
-            </div>
-        `;
-    }
-
-    updateDriversDisplay(drivers) {
-        const cpuSection = document.getElementById('settings-system');
-        if (!cpuSection) return;
-
-        let driverCard = cpuSection.querySelector('.system-card[data-type="drivers"]');
-        if (!driverCard) {
-            driverCard = document.createElement('div');
-            driverCard.className = 'system-card drivers-full-card';
-            driverCard.setAttribute('data-type', 'drivers');
-            cpuSection.appendChild(driverCard);
-        }
-
-        let html = `
-            <div class="system-card-header">Драйверы и устройства (${drivers.length})</div>
-            <div class="drivers-table">
-                <div class="drivers-table-header">
-                    <div class="col-name">Устройство</div>
-                    <div class="col-type">Тип</div>
-                    <div class="col-status">Статус</div>
-                    <div class="col-version">Версия</div>
-                    <div class="col-actions">Действия</div>
+                    <span class="core-value">${load}%</span>
                 </div>
-        `;
+            `).join('');
+        }
+
+        // График
+        this.drawChart('cpu', this.history.cpu, '#4ade80');
         
-        if (drivers && drivers.length > 0) {
-            for (const driver of drivers) {
-                // Определить класс статуса
-                let statusClass = 'active';
-                let statusText = driver.status || 'Актуален';
-                
-                if (driver.needsUpdate) {
-                    statusClass = 'warning';
-                    statusText = 'ТРЕБУЕТСЯ ОБНОВЛЕНИЕ';
-                } else if (driver.status === 'Неактивен' || driver.status === 'Ошибка') {
-                    statusClass = 'error';
-                }
-                
-                html += `
-                    <div class="drivers-table-row ${driver.needsUpdate ? 'needs-update' : ''}">
-                        <div class="col-name">
-                            <div class="driver-name-main">${this.escapeHtml(driver.name)}</div>
-                            <div class="driver-model">${this.escapeHtml(driver.model || driver.type)}</div>
-                        </div>
-                        <div class="col-type">${driver.type}</div>
-                        <div class="col-status">
-                            <span class="status-badge ${statusClass}">
-                                ${statusText}
-                            </span>
-                        </div>
-                        <div class="col-version">${this.escapeHtml(driver.version || driver.current || 'N/A')}</div>
-                        <div class="col-actions">
-                            ${driver.needsUpdate ? `
-                                <button class="driver-btn warning" onclick="systemMonitorReal.updateDriver('${driver.id}')" title="Обновить">⚠️</button>
-                            ` : `
-                                <button class="driver-btn" onclick="systemMonitorReal.updateDriver('${driver.id}')" title="Обновить">↻</button>
-                                <button class="driver-btn" onclick="systemMonitorReal.reinstallDriver('${driver.id}')" title="Переустановить">⟳</button>
-                            `}
-                        </div>
+        // Цвет карточки
+        const card = document.getElementById('cpuCard');
+        if (card) {
+            card.style.borderColor = this.getLoadColor(load);
+        }
+
+        this.lastUpdate.cpu = data;
+    }
+
+    updateMemory(data) {
+        const percent = parseFloat(data.percent) || 0;
+        
+        this.history.mem.push(percent);
+        if (this.history.mem.length > this.history.maxLength) {
+            this.history.mem.shift();
+        }
+
+        this.setText('memPercent', `${percent}%`);
+        this.setText('memUsed', `${data.used} GB`);
+        this.setText('memTotal', `${data.total} GB`);
+        this.setText('memSwap', `${data.swapUsed} / ${data.swapTotal} GB`);
+        this.setText('memCached', `${data.cached || 0} GB`);
+
+        // Прогресс-бар
+        const memBar = document.getElementById('memBar');
+        if (memBar) memBar.style.width = `${percent}%`;
+        
+        const cachePercent = (parseFloat(data.cached) / parseFloat(data.total)) * 100;
+        const memCacheBar = document.getElementById('memCacheBar');
+        if (memCacheBar) memCacheBar.style.width = `${cachePercent}%`;
+
+        this.drawChart('mem', this.history.mem, '#60a5fa');
+
+        const card = document.getElementById('memoryCard');
+        if (card) {
+            card.style.borderColor = this.getLoadColor(percent);
+        }
+
+        this.lastUpdate.mem = data;
+    }
+
+    updateDisk(data) {
+        const percent = parseFloat(data.percent) || 0;
+        
+        this.history.disk.push(percent);
+        if (this.history.disk.length > this.history.maxLength) {
+            this.history.disk.shift();
+        }
+
+        this.setText('diskPercent', `${percent}%`);
+        this.setText('diskUsed', `${data.used} GB`);
+        this.setText('diskTotal', `${data.total} GB`);
+        this.setText('diskRead', `${data.readSpeed || 0} MB/s`);
+        this.setText('diskWrite', `${data.writeSpeed || 0} MB/s`);
+
+        // Тома
+        const volumesList = document.getElementById('volumesList');
+        if (volumesList && data.volumes) {
+            volumesList.innerHTML = data.volumes.slice(0, 4).map(v => `
+                <div class="volume-item">
+                    <span class="volume-mount">${v.mount}</span>
+                    <div class="volume-bar">
+                        <div class="volume-fill" style="width: ${v.percent}%"></div>
                     </div>
-                `;
-            }
-        } else {
-            html += `<div style="padding: 12px; color: var(--text-tertiary); text-align: center;">Драйверы не найдены</div>`;
+                    <span class="volume-info">${v.used}/${v.size} GB</span>
+                </div>
+            `).join('');
         }
-        
-        html += `</div>`;
-        driverCard.innerHTML = html;
+
+        this.lastUpdate.disk = data;
     }
 
-    updateDriver(driverId) {
-        window.ipcRenderer.invoke('update-driver', driverId).then(result => {
-            console.log('[Driver Update]', result);
-            if (result.success) {
-                this.showNotification(result.message);
-            } else {
-                this.showNotification('Ошибка: ' + result.message, 'error');
-            }
-        }).catch(e => console.error('Update error:', e));
+    updateGPU(data) {
+        const gpu = Array.isArray(data) ? data[0] : data;
+        if (!gpu) return;
+
+        this.setText('gpuModel', gpu.model || '-');
+        this.setText('gpuBrand', gpu.brand || '-');
+        this.setText('gpuVram', gpu.vram ? `${gpu.vram} MB` : '-');
+        this.setText('gpuTemp', gpu.temperature ? `${gpu.temperature}°C` : '-');
+        this.setText('gpuUsage', gpu.utilizationGpu ? `${gpu.utilizationGpu}%` : '-');
+
+        this.lastUpdate.gpu = data;
     }
 
-    reinstallDriver(driverId) {
-        if (confirm(`Переустановить драйвер ${driverId}?`)) {
-            window.ipcRenderer.invoke('reinstall-driver', driverId).then(result => {
-                console.log('[Driver Reinstall]', result);
-                if (result.success) {
-                    this.showNotification(result.message);
-                } else {
-                    this.showNotification('Ошибка: ' + result.message, 'error');
-                }
-            }).catch(e => console.error('Reinstall error:', e));
+    updateOS(data) {
+        this.setText('osName', `${data.platform} ${data.distro}`);
+        this.setText('osVersion', data.release || '-');
+        this.setText('osKernel', data.kernel || '-');
+        this.setText('osArch', data.arch || '-');
+        this.setText('osUsers', data.users || '-');
+
+        // Uptime
+        const uptimeSec = data.uptime || 0;
+        const days = Math.floor(uptimeSec / 86400);
+        const hours = Math.floor((uptimeSec % 86400) / 3600);
+        const mins = Math.floor((uptimeSec % 3600) / 60);
+        this.setText('osUptime', `${days}д ${hours}ч ${mins}м`);
+
+        // Батарея
+        if (data.hasBattery) {
+            const batteryItem = document.getElementById('batteryItem');
+            if (batteryItem) batteryItem.style.display = 'flex';
+            this.setText('osBattery', `${data.batteryPercent}% ${data.isCharging ? '⚡' : ''}`);
         }
+
+        this.lastUpdate.os = data;
     }
 
-    showNotification(message, type = 'success') {
-        const notification = document.createElement('div');
-        notification.className = `monitor-notification ${type}`;
-        notification.textContent = message;
-        document.body.appendChild(notification);
+    updateProcesses(processes) {
+        const list = document.getElementById('processList');
+        if (!list) return;
+
+        this.currentProcesses = processes;
+
+        list.innerHTML = processes.slice(0, 15).map(p => `
+            <div class="process-row">
+                <div class="col-name" title="${this.escapeHtml(p.name)}">${this.escapeHtml(p.name)}</div>
+                <div class="col-pid">${p.pid}</div>
+                <div class="col-cpu">
+                    <span class="cpu-badge" style="background: ${this.getLoadColor(parseFloat(p.cpu))}">${p.cpu}%</span>
+                </div>
+                <div class="col-mem">${p.mem}%</div>
+                <div class="col-user">${this.escapeHtml(p.user || '-')}</div>
+            </div>
+        `).join('');
+
+        this.lastUpdate.processes = processes;
+    }
+
+    sortProcesses(by) {
+        if (!this.currentProcesses) return;
         
-        setTimeout(() => {
-            notification.classList.add('fade-out');
-            setTimeout(() => notification.remove(), 300);
-        }, 3000);
+        const sorted = [...this.currentProcesses].sort((a, b) => {
+            if (by === 'mem') return parseFloat(b.mem) - parseFloat(a.mem);
+            if (by === 'cpu') return parseFloat(b.cpu) - parseFloat(a.cpu);
+            if (by === 'name') return a.name.localeCompare(b.name);
+            return 0;
+        });
+        
+        this.updateProcesses(sorted);
+    }
+
+    updateDrivers(drivers) {
+        const list = document.getElementById('driversList');
+        if (!list) return;
+
+        list.innerHTML = drivers.map(d => `
+            <div class="driver-item ${d.status === 'Активен' ? 'active' : 'inactive'}">
+                <div class="driver-icon">${this.getDriverIcon(d.type)}</div>
+                <div class="driver-info">
+                    <div class="driver-name">${this.escapeHtml(d.name)}</div>
+                    <div class="driver-model">${this.escapeHtml(d.model)}</div>
+                </div>
+                <div class="driver-type">${d.type}</div>
+                <div class="driver-status ${d.status === 'Активен' ? 'active' : ''}">${d.status}</div>
+                <div class="driver-actions">
+                    <button class="driver-btn" onclick="systemMonitorReal.updateDriver('${d.id}')" title="Обновить">↻</button>
+                </div>
+            </div>
+        `).join('');
+
+        this.lastUpdate.drivers = drivers;
+    }
+
+    getDriverIcon(type) {
+        const icons = {
+            'GPU': '🎮',
+            'Network': '🌐',
+            'USB': '🔌',
+            'Audio': '🔊',
+            'System': '⚙️'
+        };
+        return icons[type] || '📦';
+    }
+
+    getLoadColor(load) {
+        if (load < 50) return '#4ade80';
+        if (load < 75) return '#fbbf24';
+        return '#f87171';
+    }
+
+    setText(id, text) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
     }
 
     escapeHtml(text) {
         const div = document.createElement('div');
-        div.textContent = text;
+        div.textContent = text || '';
         return div.innerHTML;
     }
 
-    toggleMonitoring() {
-        if (this.monitoringActive) {
-            this.stopMonitoring();
-            this.updateStatusUI('Мониторинг остановлен');
-            const btn = document.getElementById('toggleMonitoring');
-            if (btn) {
-                btn.textContent = '▶ Запустить мониторинг';
-                btn.classList.remove('primary');
-            }
-        } else {
-            this.startMonitoring();
-            this.updateStatusUI('Мониторинг активен');
-            const btn = document.getElementById('toggleMonitoring');
-            if (btn) {
-                btn.textContent = '⏸ Остановить мониторинг';
-                btn.classList.add('primary');
-            }
-        }
-    }
-
-    updateStatusUI(status) {
-        const statusEl = document.getElementById('monitorStatus');
-        if (statusEl) {
-            statusEl.textContent = status;
-            statusEl.classList.add('status-update');
-            setTimeout(() => statusEl.classList.remove('status-update'), 300);
+    async updateDriver(driverId) {
+        try {
+            const result = await window.ipcRenderer.invoke('update-driver', driverId);
+            this.showNotification(result.message, result.success ? 'success' : 'error');
+        } catch (e) {
+            this.showNotification('Ошибка обновления', 'error');
         }
     }
 
     async checkForUpdates() {
         try {
-            console.log('[SystemMonitor] Проверка обновлений...');
-            const updateInfo = await window.ipcRenderer.invoke('check-driver-updates');
+            this.showNotification('Проверка обновлений...', 'info');
+            const result = await window.ipcRenderer.invoke('check-driver-updates');
             
-            if (updateInfo && updateInfo.updates) {
-                // Обновить таблицу драйверов с информацией об обновлениях
-                const driverCard = document.querySelector('.system-card[data-type="drivers"]');
-                if (driverCard) {
-                    // Обновить драйверы с новой информацией
-                    this.updateDriversDisplay(updateInfo.updates);
-                    
-                    // Показать уведомление если есть обновления
-                    if (updateInfo.hasUpdates) {
-                        this.showNotification('Доступны обновления драйверов', 'warning');
-                    } else {
-                        this.showNotification('Все драйверы актуальны', 'success');
-                    }
-                }
-                
-                this.updateStatusUI(`Проверено: ${new Date().toLocaleTimeString()}`);
+            if (result.hasUpdates) {
+                this.showNotification('Доступны обновления', 'warning');
+            } else {
+                this.showNotification('Все драйверы актуальны', 'success');
+            }
+            
+            if (result.updates) {
+                this.updateDrivers(result.updates);
             }
         } catch (e) {
-            console.error('[SystemMonitor] Check updates error:', e);
-            this.showNotification('Ошибка при проверке обновлений', 'error');
+            this.showNotification('Ошибка проверки', 'error');
+        }
+    }
+
+    toggleMonitoring() {
+        if (this.monitoringActive) {
+            this.stopMonitoring();
+            this.setText('monitorStatus', 'Мониторинг остановлен');
+            const btn = document.getElementById('toggleMonitoring');
+            if (btn) btn.textContent = '▶ Запустить';
+        } else {
+            this.startMonitoring();
+            this.setText('monitorStatus', 'Мониторинг активен');
+            const btn = document.getElementById('toggleMonitoring');
+            if (btn) btn.textContent = '⏸ Пауза';
         }
     }
 
@@ -554,7 +575,7 @@ class SystemMonitorReal {
         if (this.monitoringActive) return;
         this.monitoringActive = true;
         console.log('[SystemMonitor] Мониторинг запущен');
-
+        
         this.monitoringInterval = setInterval(() => {
             this.updateAllData();
         }, this.updateInterval);
@@ -569,9 +590,25 @@ class SystemMonitorReal {
         console.log('[SystemMonitor] Мониторинг остановлен');
     }
 
+    showNotification(message, type = 'info') {
+        const existing = document.querySelector('.system-notification');
+        if (existing) existing.remove();
+
+        const notification = document.createElement('div');
+        notification.className = `system-notification ${type}`;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+            notification.classList.add('fade-out');
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+
     dispose() {
         this.stopMonitoring();
     }
 }
 
 export const systemMonitorReal = new SystemMonitorReal();
+window.systemMonitorReal = systemMonitorReal;
