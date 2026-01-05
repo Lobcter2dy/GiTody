@@ -8,8 +8,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "electron": "npm run build && electron . --no-sandbox",
-    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron . --no-sandbox\"",
+    "electron": "ELECTRON_DISABLE_SANDBOX=1 electron . --no-sandbox --disable-setuid-sandbox",
+    "electron:restart": "./GITODY.sh",
+    "electron:dev": "ELECTRON_DISABLE_SANDBOX=1 concurrently -k \"npm run dev\" \"wait-on http://localhost:5173 && electron . --no-sandbox --disable-setuid-sandbox --dev\"",
     "electron:build": "npm run build && electron-builder",
     "electron:pack": "npm run build && electron-builder --dir",
     "electron:standalone": "npm run build && electron . --no-sandbox"
@@ -24,7 +25,7 @@
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^9.2.1",
-    "electron": "^39.2.7",
+    "electron": "22.3.27",
     "electron-builder": "^26.0.12",
     "vite": "^7.3.0",
     "wait-on": "^9.0.3"

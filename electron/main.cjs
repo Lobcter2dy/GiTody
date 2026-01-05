@@ -10,8 +10,12 @@ const os = require('os');
 const dns = require('dns');
 const net = require('net');
 
-// Отключить sandbox для Linux
+// Отключить sandbox и исправить отрисовку для Linux
 app.commandLine.appendSwitch('no-sandbox');
+app.commandLine.appendSwitch('disable-setuid-sandbox');
+app.commandLine.appendSwitch('disable-gpu-sandbox');
+app.commandLine.appendSwitch('disable-software-rasterizer');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
 
 // === Флаги для микрофона и Web Speech API ===
 app.commandLine.appendSwitch('enable-speech-dispatcher');
@@ -151,7 +155,10 @@ function createWindow() {
     
     ses.setCertificateVerifyProc((request, callback) => callback(0));
 
+    // Всегда используем локальный production сервер
+    console.log('[App] Loading from http://127.0.0.1:47523');
     mainWindow.loadURL('http://127.0.0.1:47523');
+
     mainWindow.on('closed', () => { mainWindow = null; });
 }
 
@@ -986,17 +993,32 @@ ipcMain.handle('github-oauth-exchange', async (event, code) => {
     return { code, needsExchange: true };
 });
 
-// === App Lifecycle ===
-app.whenReady().then(async () => {
-    await requestMicrophoneAccess();
-    startLocalServer();
-    startOAuthCallbackServer();
-    createWindow();
+// === Single Instance Lock ===
+const gotTheLock = app.requestSingleInstanceLock();
 
-    app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) createWindow();
+if (!gotTheLock) {
+    app.quit();
+} else {
+    app.on('second-instance', (event, commandLine, workingDirectory) => {
+        // Фокусируемся на существующем окне
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.focus();
+        }
     });
-});
+
+    // === App Lifecycle ===
+    app.whenReady().then(async () => {
+        await requestMicrophoneAccess();
+        startLocalServer();
+        startOAuthCallbackServer();
+        createWindow();
+
+        app.on('activate', () => {
+            if (BrowserWindow.getAllWindows().length === 0) createWindow();
+        });
+    });
+}
 
 app.on('window-all-closed', () => {
     // Отключить VPN при выходе

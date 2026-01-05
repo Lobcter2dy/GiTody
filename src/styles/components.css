@@ -94,7 +94,7 @@
 .btn:hover {
     background: var(--bg-elevated);
     border-color: var(--border-light);
-    transform: translateY(-1px);
+    transform: translate3d(0, -1px, 0);
     box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255,255,255,0.05);
 }
 
@@ -156,7 +156,7 @@
 .card:hover {
     border-color: var(--border-light);
     box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255,255,255,0.04);
-    transform: translateY(-1px);
+    transform: translate3d(0, -1px, 0);
 }
 
 .card-header {

@@ -1,19 +1,17 @@
 /**
- * System Monitor Real - Продвинутый мониторинг системы
- * Реальные данные через systeminformation
+ * System Monitor Real - Мониторинг системы
+ * По умолчанию ВЫКЛЮЧЕН - запускается вручную
  */
 
 class SystemMonitorReal {
     constructor() {
         this.monitoringActive = false;
         this.monitoringInterval = null;
-        this.updateInterval = 1500;
+        this.updateInterval = 2000;
+        this.isInitialized = false;
         this.history = {
             cpu: [],
             mem: [],
-            disk: [],
-            netRx: [],
-            netTx: [],
             maxLength: 60
         };
         this.lastUpdate = {};
@@ -23,11 +21,11 @@ class SystemMonitorReal {
     }
 
     init() {
-        console.log('[SystemMonitor] Инициализация...');
+        if (this.isInitialized) return;
+        this.isInitialized = true;
+        console.log('[SystemMonitor] Готов к работе (выключен по умолчанию)');
         this.renderUI();
-        this.initCharts();
-        this.startMonitoring();
-        this.updateAllData();
+        this.addStyles();
     }
 
     renderUI() {
@@ -35,893 +33,718 @@ class SystemMonitorReal {
         if (!container) return;
 
         container.innerHTML = `
-            <div class="system-monitor-container">
-                <!-- Заголовок с управлением -->
-                <div class="monitor-header">
-                    <div class="monitor-status">
-                        <span class="status-indicator active" id="statusIndicator"></span>
-                        <span id="monitorStatus">Мониторинг активен</span>
+            <div class="sysmon">
+                <div class="sysmon-header">
+                    <div class="sysmon-title">
+                        <span class="sysmon-dot" id="statusDot"></span>
+                        <span id="monitorStatus">Мониторинг выключен</span>
                     </div>
-                    <div class="monitor-actions">
-                        <button class="monitor-btn" onclick="systemMonitorReal.toggleMonitoring()" id="toggleMonitoring">
-                            <span class="btn-icon">⏸</span> Пауза
+                    <div class="sysmon-controls">
+                        <button class="sysmon-btn primary" onclick="systemMonitorReal.toggleMonitoring()" id="toggleBtn">
+                            Включить
                         </button>
-                        <button class="monitor-btn" onclick="systemMonitorReal.updateAllData()">
-                            <span class="btn-icon">↻</span> Обновить
+                        <button class="sysmon-btn" onclick="systemMonitorReal.updateAllData()" id="refreshBtn" disabled>
+                            Обновить
                         </button>
                     </div>
                 </div>
 
-                <!-- Сетка метрик -->
-                <div class="metrics-grid">
-                    <!-- CPU Card -->
-                    <div class="metric-card cpu-card" id="cpuCard">
-                        <div class="metric-header">
-                            <div class="metric-title-row">
-                                <span class="metric-icon">💻</span>
-                                <span class="metric-title">Процессор</span>
-                            </div>
-                            <span class="metric-value" id="cpuLoad">0%</span>
+                <div class="sysmon-grid">
+                    <div class="sysmon-card" id="cpuCard">
+                        <div class="card-head">
+                            <span class="card-label">CPU</span>
+                            <span class="card-value" id="cpuLoad">—</span>
                         </div>
-                        <div class="metric-chart-container">
-                            <canvas id="cpuChart" width="280" height="70"></canvas>
+                        <div class="card-chart">
+                            <canvas id="cpuChart" width="300" height="60"></canvas>
                         </div>
-                        <div class="metric-details">
-                            <div class="detail-row"><span>Модель</span><span id="cpuModel" class="detail-value">-</span></div>
-                            <div class="detail-row"><span>Ядра</span><span id="cpuCores" class="detail-value">-</span></div>
-                            <div class="detail-row"><span>Частота</span><span id="cpuSpeed" class="detail-value">-</span></div>
-                            <div class="detail-row"><span>Температура</span><span id="cpuTemp" class="detail-value temp">-</span></div>
+                        <div class="card-info">
+                            <div class="info-row"><span>Модель</span><span id="cpuModel">—</span></div>
+                            <div class="info-row"><span>Ядра</span><span id="cpuCores">—</span></div>
+                            <div class="info-row"><span>Частота</span><span id="cpuSpeed">—</span></div>
+                            <div class="info-row"><span>Температура</span><span id="cpuTemp">—</span></div>
                         </div>
-                        <div class="core-loads" id="coreLoads"></div>
+                        <div class="core-grid" id="coreLoads"></div>
                     </div>
 
-                    <!-- Memory Card -->
-                    <div class="metric-card memory-card" id="memoryCard">
-                        <div class="metric-header">
-                            <div class="metric-title-row">
-                                <span class="metric-icon">🧠</span>
-                                <span class="metric-title">Память</span>
-                            </div>
-                            <span class="metric-value" id="memPercent">0%</span>
+                    <div class="sysmon-card" id="memCard">
+                        <div class="card-head">
+                            <span class="card-label">RAM</span>
+                            <span class="card-value" id="memPercent">—</span>
                         </div>
-                        <div class="metric-chart-container">
-                            <canvas id="memChart" width="280" height="70"></canvas>
+                        <div class="card-chart">
+                            <canvas id="memChart" width="300" height="60"></canvas>
                         </div>
-                        <div class="memory-bar-wrapper">
-                            <div class="memory-bar">
-                                <div class="memory-used" id="memBar" style="width: 0%"></div>
-                                <div class="memory-cached" id="memCacheBar" style="width: 0%"></div>
-                            </div>
-                            <div class="memory-legend">
-                                <span><i class="legend-dot used"></i>Используется</span>
-                                <span><i class="legend-dot cached"></i>Кэш</span>
+                        <div class="mem-bar-wrap">
+                            <div class="mem-bar">
+                                <div class="mem-used" id="memBar"></div>
+                                <div class="mem-cached" id="memCacheBar"></div>
                             </div>
                         </div>
-                        <div class="metric-details">
-                            <div class="detail-row"><span>Используется</span><span id="memUsed" class="detail-value">-</span></div>
-                            <div class="detail-row"><span>Всего</span><span id="memTotal" class="detail-value">-</span></div>
-                            <div class="detail-row"><span>Доступно</span><span id="memAvailable" class="detail-value">-</span></div>
-                            <div class="detail-row"><span>Swap</span><span id="memSwap" class="detail-value">-</span></div>
+                        <div class="card-info">
+                            <div class="info-row"><span>Используется</span><span id="memUsed">—</span></div>
+                            <div class="info-row"><span>Всего</span><span id="memTotal">—</span></div>
+                            <div class="info-row"><span>Доступно</span><span id="memAvailable">—</span></div>
+                            <div class="info-row"><span>Swap</span><span id="memSwap">—</span></div>
                         </div>
                     </div>
 
-                    <!-- GPU Card -->
-                    <div class="metric-card gpu-card" id="gpuCard">
-                        <div class="metric-header">
-                            <div class="metric-title-row">
-                                <span class="metric-icon">🎮</span>
-                                <span class="metric-title">Видеокарта</span>
-                            </div>
-                            <span class="metric-value" id="gpuUsage">-</span>
+                    <div class="sysmon-card" id="gpuCard">
+                        <div class="card-head">
+                            <span class="card-label">GPU</span>
+                            <span class="card-value" id="gpuUsage">—</span>
                         </div>
-                        <div class="gpu-info-main">
-                            <div class="gpu-model" id="gpuModel">-</div>
-                            <div class="gpu-brand" id="gpuBrand">-</div>
+                        <div class="gpu-model-box">
+                            <div class="gpu-name" id="gpuModel">—</div>
+                            <div class="gpu-vendor" id="gpuBrand">—</div>
                         </div>
-                        <div class="metric-details">
-                            <div class="detail-row"><span>VRAM</span><span id="gpuVram" class="detail-value">-</span></div>
-                            <div class="detail-row"><span>Температура</span><span id="gpuTemp" class="detail-value temp">-</span></div>
-                            <div class="detail-row"><span>Использование VRAM</span><span id="gpuMemUsage" class="detail-value">-</span></div>
-                            <div class="detail-row"><span>Вентилятор</span><span id="gpuFan" class="detail-value">-</span></div>
+                        <div class="card-info">
+                            <div class="info-row"><span>VRAM</span><span id="gpuVram">—</span></div>
+                            <div class="info-row"><span>Температура</span><span id="gpuTemp">—</span></div>
+                            <div class="info-row"><span>VRAM использовано</span><span id="gpuMemUsage">—</span></div>
+                            <div class="info-row"><span>Вентилятор</span><span id="gpuFan">—</span></div>
                         </div>
                     </div>
 
-                    <!-- Disk Card -->
-                    <div class="metric-card disk-card" id="diskCard">
-                        <div class="metric-header">
-                            <div class="metric-title-row">
-                                <span class="metric-icon">💾</span>
-                                <span class="metric-title">Хранилище</span>
-                            </div>
-                            <span class="metric-value" id="diskPercent">0%</span>
+                    <div class="sysmon-card" id="diskCard">
+                        <div class="card-head">
+                            <span class="card-label">Диск</span>
+                            <span class="card-value" id="diskPercent">—</span>
                         </div>
-                        <div class="disk-io-stats">
-                            <div class="io-stat read">
-                                <span class="io-icon">📖</span>
+                        <div class="disk-io">
+                            <div class="io-item">
                                 <span class="io-label">Чтение</span>
-                                <span class="io-value" id="diskRead">0 MB/s</span>
+                                <span class="io-val" id="diskRead">—</span>
                             </div>
-                            <div class="io-stat write">
-                                <span class="io-icon">✏️</span>
+                            <div class="io-item">
                                 <span class="io-label">Запись</span>
-                                <span class="io-value" id="diskWrite">0 MB/s</span>
+                                <span class="io-val" id="diskWrite">—</span>
                             </div>
                         </div>
-                        <div class="metric-details">
-                            <div class="detail-row"><span>Используется</span><span id="diskUsed" class="detail-value">-</span></div>
-                            <div class="detail-row"><span>Всего</span><span id="diskTotal" class="detail-value">-</span></div>
+                        <div class="card-info">
+                            <div class="info-row"><span>Используется</span><span id="diskUsed">—</span></div>
+                            <div class="info-row"><span>Всего</span><span id="diskTotal">—</span></div>
                         </div>
-                        <div class="volumes-list" id="volumesList"></div>
+                        <div class="volumes" id="volumesList"></div>
                     </div>
                 </div>
 
-                <!-- Информация об ОС -->
-                <div class="os-info-panel" id="osInfoPanel">
-                    <div class="os-info-header">
-                        <span class="os-icon">🖥️</span>
-                        <span>Информация о системе</span>
+                <div class="sysmon-section">
+                    <div class="section-head">
+                        <span class="section-title">Система</span>
                     </div>
-                    <div class="os-info-grid">
-                        <div class="os-item">
-                            <span class="os-label">Операционная система</span>
-                            <span class="os-value" id="osName">-</span>
-                        </div>
-                        <div class="os-item">
-                            <span class="os-label">Версия</span>
-                            <span class="os-value" id="osVersion">-</span>
-                        </div>
-                        <div class="os-item">
-                            <span class="os-label">Ядро</span>
-                            <span class="os-value" id="osKernel">-</span>
-                        </div>
-                        <div class="os-item">
-                            <span class="os-label">Архитектура</span>
-                            <span class="os-value" id="osArch">-</span>
-                        </div>
-                        <div class="os-item">
-                            <span class="os-label">Имя хоста</span>
-                            <span class="os-value" id="osHostname">-</span>
-                        </div>
-                        <div class="os-item">
-                            <span class="os-label">Время работы</span>
-                            <span class="os-value uptime" id="osUptime">-</span>
-                        </div>
-                        <div class="os-item" id="batteryItem" style="display:none">
-                            <span class="os-label">Батарея</span>
-                            <span class="os-value" id="osBattery">-</span>
-                        </div>
+                    <div class="os-grid">
+                        <div class="os-item"><span class="os-lbl">ОС</span><span class="os-val" id="osName">—</span></div>
+                        <div class="os-item"><span class="os-lbl">Версия</span><span class="os-val" id="osVersion">—</span></div>
+                        <div class="os-item"><span class="os-lbl">Ядро</span><span class="os-val" id="osKernel">—</span></div>
+                        <div class="os-item"><span class="os-lbl">Архитектура</span><span class="os-val" id="osArch">—</span></div>
+                        <div class="os-item"><span class="os-lbl">Хост</span><span class="os-val" id="osHostname">—</span></div>
+                        <div class="os-item"><span class="os-lbl">Uptime</span><span class="os-val mono" id="osUptime">—</span></div>
                     </div>
                 </div>
 
-                <!-- Процессы -->
-                <div class="processes-panel" id="processesPanel">
-                    <div class="processes-header">
-                        <div class="processes-title">
-                            <span class="processes-icon">⚡</span>
-                            <span>Процессы</span>
-                            <span class="process-count" id="processCount">0</span>
-                        </div>
-                        <div class="process-controls">
-                            <input type="text" class="process-search" placeholder="Поиск..." id="processSearch" oninput="systemMonitorReal.filterProcesses(this.value)">
-                            <select id="processSortSelect" onchange="systemMonitorReal.sortProcesses(this.value)">
-                                <option value="mem">По памяти ↓</option>
-                                <option value="cpu">По CPU ↓</option>
-                                <option value="name">По имени</option>
-                                <option value="pid">По PID</option>
-                            </select>
-                        </div>
+                <div class="sysmon-section">
+                    <div class="section-head">
+                        <span class="section-title">Процессы</span>
+                        <span class="section-count" id="processCount">0</span>
                     </div>
-                    <div class="processes-table">
-                        <div class="process-table-header">
+                    <div class="proc-controls">
+                        <input type="text" class="proc-search" placeholder="Поиск..." id="processSearch" oninput="systemMonitorReal.filterProcesses(this.value)">
+                        <select id="processSortSelect" class="proc-sort" onchange="systemMonitorReal.sortProcesses(this.value)">
+                            <option value="mem">RAM ↓</option>
+                            <option value="cpu">CPU ↓</option>
+                            <option value="name">Имя</option>
+                            <option value="pid">PID</option>
+                        </select>
+                    </div>
+                    <div class="proc-table">
+                        <div class="proc-head">
                             <div class="col-name">Процесс</div>
                             <div class="col-pid">PID</div>
                             <div class="col-cpu">CPU</div>
                             <div class="col-mem">RAM</div>
-                            <div class="col-user">Пользователь</div>
+                            <div class="col-user">User</div>
                             <div class="col-state">Статус</div>
                         </div>
-                        <div class="process-list" id="processList">
-                            <div class="loading-processes">Загрузка процессов...</div>
+                        <div class="proc-list" id="processList">
+                            <div class="proc-empty">Включите мониторинг</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Драйверы -->
-                <div class="drivers-panel" id="driversPanel">
-                    <div class="drivers-header">
-                        <div class="drivers-title">
-                            <span class="drivers-icon">⚙️</span>
-                            <span>Драйверы и устройства</span>
-                        </div>
-                        <button class="check-updates-btn" onclick="systemMonitorReal.checkForUpdates()">
-                            <span>🔍</span> Проверить обновления
-                        </button>
+                <div class="sysmon-section">
+                    <div class="section-head">
+                        <span class="section-title">Драйверы</span>
+                        <button class="sysmon-btn sm" onclick="systemMonitorReal.checkForUpdates()">Проверить</button>
                     </div>
-                    <div class="drivers-grid" id="driversList">
-                        <div class="loading-drivers">Загрузка драйверов...</div>
+                    <div class="drivers-list" id="driversList">
+                        <div class="proc-empty">Включите мониторинг</div>
                     </div>
                 </div>
             </div>
         `;
 
-        this.addStyles();
+        this.initCharts();
     }
 
     addStyles() {
-        if (document.getElementById('system-monitor-styles')) return;
+        if (document.getElementById('sysmon-styles')) return;
         
         const style = document.createElement('style');
-        style.id = 'system-monitor-styles';
+        style.id = 'sysmon-styles';
         style.textContent = `
-            .system-monitor-container {
-                padding: 20px;
-                max-width: 1400px;
+            .sysmon {
+                padding: 16px;
+                max-width: 1200px;
                 margin: 0 auto;
             }
-            
-            .monitor-header {
+
+            .sysmon-header {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                margin-bottom: 20px;
-                padding: 15px 20px;
-                background: linear-gradient(135deg, rgba(40, 40, 50, 0.9), rgba(30, 30, 40, 0.9));
-                border-radius: 12px;
-                border: 1px solid rgba(255, 255, 255, 0.1);
+                padding: 12px 16px;
+                background: rgba(22, 27, 34, 0.8);
+                border: 1px solid rgba(48, 54, 61, 0.8);
+                border-radius: 6px;
+                margin-bottom: 16px;
             }
-            
-            .monitor-status {
+
+            .sysmon-title {
                 display: flex;
                 align-items: center;
-                gap: 10px;
-                font-size: 14px;
-                color: #e0e0e0;
-            }
-            
-            .status-indicator {
-                width: 10px;
-                height: 10px;
-                border-radius: 50%;
-                background: #666;
-            }
-            
-            .status-indicator.active {
-                background: #4ade80;
-                box-shadow: 0 0 10px #4ade80;
-                animation: pulse 2s infinite;
-            }
-            
-            @keyframes pulse {
-                0%, 100% { opacity: 1; }
-                50% { opacity: 0.5; }
-            }
-            
-            .monitor-actions {
-                display: flex;
-                gap: 10px;
-            }
-            
-            .monitor-btn {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                padding: 8px 16px;
-                background: rgba(255, 255, 255, 0.1);
-                border: 1px solid rgba(255, 255, 255, 0.2);
-                border-radius: 8px;
-                color: #e0e0e0;
-                cursor: pointer;
+                gap: 8px;
                 font-size: 13px;
-                transition: all 0.2s;
+                color: #8b949e;
             }
-            
-            .monitor-btn:hover {
-                background: rgba(255, 255, 255, 0.15);
-                border-color: rgba(255, 255, 255, 0.3);
+
+            .sysmon-dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: #484f58;
             }
-            
-            .metrics-grid {
+
+            .sysmon-dot.active {
+                background: #3fb950;
+                box-shadow: 0 0 8px rgba(63, 185, 80, 0.4);
+            }
+
+            .sysmon-controls {
+                display: flex;
+                gap: 8px;
+            }
+
+            .sysmon-btn {
+                padding: 5px 12px;
+                font-size: 12px;
+                font-weight: 500;
+                color: #c9d1d9;
+                background: rgba(110, 118, 129, 0.1);
+                border: 1px solid rgba(48, 54, 61, 0.8);
+                border-radius: 6px;
+                cursor: pointer;
+                transition: background 0.15s, border-color 0.15s;
+            }
+
+            .sysmon-btn:hover:not(:disabled) {
+                background: rgba(110, 118, 129, 0.2);
+                border-color: #8b949e;
+            }
+
+            .sysmon-btn:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+
+            .sysmon-btn.primary {
+                background: rgba(35, 134, 54, 0.15);
+                border-color: rgba(63, 185, 80, 0.4);
+                color: #3fb950;
+            }
+
+            .sysmon-btn.primary:hover {
+                background: rgba(35, 134, 54, 0.25);
+            }
+
+            .sysmon-btn.sm {
+                padding: 4px 10px;
+                font-size: 11px;
+            }
+
+            .sysmon-grid {
                 display: grid;
                 grid-template-columns: repeat(2, 1fr);
-                gap: 20px;
-                margin-bottom: 20px;
+                gap: 16px;
+                margin-bottom: 16px;
             }
-            
-            @media (max-width: 1200px) {
-                .metrics-grid {
-                    grid-template-columns: 1fr;
-                }
+
+            @media (max-width: 900px) {
+                .sysmon-grid { grid-template-columns: 1fr; }
             }
-            
-            .metric-card {
-                background: linear-gradient(145deg, rgba(35, 35, 45, 0.95), rgba(25, 25, 35, 0.95));
-                border-radius: 16px;
-                padding: 20px;
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                transition: all 0.3s ease;
+
+            .sysmon-card {
+                background: rgba(22, 27, 34, 0.8);
+                border: 1px solid rgba(48, 54, 61, 0.8);
+                border-radius: 6px;
+                padding: 16px;
             }
-            
-            .metric-card:hover {
-                border-color: rgba(255, 255, 255, 0.15);
-                transform: translateY(-2px);
-                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            }
-            
-            .metric-header {
+
+            .card-head {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                margin-bottom: 15px;
+                margin-bottom: 12px;
             }
-            
-            .metric-title-row {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-            }
-            
-            .metric-icon {
-                font-size: 24px;
-            }
-            
-            .metric-title {
-                font-size: 16px;
+
+            .card-label {
+                font-size: 12px;
                 font-weight: 600;
-                color: #fff;
+                color: #8b949e;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
             }
-            
-            .metric-value {
-                font-size: 28px;
-                font-weight: 700;
-                color: #4ade80;
-                font-family: 'JetBrains Mono', monospace;
+
+            .card-value {
+                font-size: 20px;
+                font-weight: 600;
+                color: #c9d1d9;
+                font-family: 'SF Mono', 'Fira Code', monospace;
             }
-            
-            .metric-chart-container {
-                margin: 15px 0;
-                border-radius: 8px;
+
+            .card-chart {
+                margin: 12px 0;
+                background: rgba(13, 17, 23, 0.6);
+                border-radius: 4px;
                 overflow: hidden;
-                background: rgba(0, 0, 0, 0.2);
             }
-            
-            .metric-details {
+
+            .card-info {
                 display: grid;
-                gap: 8px;
-                margin-top: 15px;
+                gap: 6px;
             }
-            
-            .detail-row {
+
+            .info-row {
                 display: flex;
                 justify-content: space-between;
-                font-size: 13px;
-                padding: 6px 0;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+                font-size: 12px;
+                padding: 4px 0;
+                border-bottom: 1px solid rgba(48, 54, 61, 0.4);
             }
-            
-            .detail-row span:first-child {
-                color: #888;
+
+            .info-row span:first-child {
+                color: #8b949e;
             }
-            
-            .detail-value {
-                color: #e0e0e0;
-                font-family: 'JetBrains Mono', monospace;
+
+            .info-row span:last-child {
+                color: #c9d1d9;
+                font-family: 'SF Mono', 'Fira Code', monospace;
             }
-            
-            .detail-value.temp {
-                color: #fbbf24;
-            }
-            
-            .core-loads {
+
+            .core-grid {
                 display: grid;
                 grid-template-columns: repeat(4, 1fr);
-                gap: 8px;
-                margin-top: 15px;
+                gap: 6px;
+                margin-top: 12px;
             }
-            
-            .core-load-item {
-                background: rgba(0, 0, 0, 0.2);
-                border-radius: 8px;
-                padding: 8px;
+
+            .core-item {
+                background: rgba(13, 17, 23, 0.6);
+                border-radius: 4px;
+                padding: 6px;
                 text-align: center;
             }
-            
-            .core-label {
-                font-size: 11px;
-                color: #888;
+
+            .core-lbl {
+                font-size: 10px;
+                color: #8b949e;
                 display: block;
             }
-            
+
             .core-bar {
-                height: 4px;
-                background: rgba(255, 255, 255, 0.1);
+                height: 3px;
+                background: rgba(48, 54, 61, 0.6);
                 border-radius: 2px;
-                margin: 5px 0;
+                margin: 4px 0;
                 overflow: hidden;
             }
-            
+
             .core-fill {
                 height: 100%;
                 border-radius: 2px;
-                transition: width 0.3s ease;
+                transition: width 0.3s;
             }
-            
-            .core-value {
-                font-size: 12px;
-                font-weight: 600;
-                font-family: 'JetBrains Mono', monospace;
-            }
-            
-            .memory-bar-wrapper {
-                margin: 15px 0;
-            }
-            
-            .memory-bar {
-                height: 8px;
-                background: rgba(0, 0, 0, 0.3);
-                border-radius: 4px;
-                overflow: hidden;
-                display: flex;
-            }
-            
-            .memory-used {
-                background: linear-gradient(90deg, #60a5fa, #3b82f6);
-                transition: width 0.3s ease;
-            }
-            
-            .memory-cached {
-                background: rgba(96, 165, 250, 0.3);
-                transition: width 0.3s ease;
-            }
-            
-            .memory-legend {
-                display: flex;
-                gap: 15px;
-                margin-top: 8px;
+
+            .core-val {
                 font-size: 11px;
-                color: #888;
-            }
-            
-            .legend-dot {
-                display: inline-block;
-                width: 8px;
-                height: 8px;
-                border-radius: 2px;
-                margin-right: 5px;
-            }
-            
-            .legend-dot.used {
-                background: #60a5fa;
-            }
-            
-            .legend-dot.cached {
-                background: rgba(96, 165, 250, 0.3);
-            }
-            
-            .gpu-info-main {
-                margin: 15px 0;
-                padding: 12px;
-                background: rgba(0, 0, 0, 0.2);
-                border-radius: 8px;
-            }
-            
-            .gpu-model {
-                font-size: 15px;
                 font-weight: 600;
-                color: #fff;
+                font-family: 'SF Mono', 'Fira Code', monospace;
             }
-            
-            .gpu-brand {
-                font-size: 12px;
-                color: #888;
-                margin-top: 4px;
+
+            .mem-bar-wrap {
+                margin: 12px 0;
             }
-            
-            .disk-io-stats {
+
+            .mem-bar {
+                height: 6px;
+                background: rgba(13, 17, 23, 0.6);
+                border-radius: 3px;
+                display: flex;
+                overflow: hidden;
+            }
+
+            .mem-used {
+                background: #58a6ff;
+                transition: width 0.3s;
+            }
+
+            .mem-cached {
+                background: rgba(88, 166, 255, 0.3);
+                transition: width 0.3s;
+            }
+
+            .gpu-model-box {
+                background: rgba(13, 17, 23, 0.6);
+                border-radius: 4px;
+                padding: 10px;
+                margin: 12px 0;
+            }
+
+            .gpu-name {
+                font-size: 13px;
+                font-weight: 500;
+                color: #c9d1d9;
+            }
+
+            .gpu-vendor {
+                font-size: 11px;
+                color: #8b949e;
+                margin-top: 2px;
+            }
+
+            .disk-io {
                 display: grid;
                 grid-template-columns: 1fr 1fr;
-                gap: 15px;
-                margin: 15px 0;
+                gap: 12px;
+                margin: 12px 0;
             }
-            
-            .io-stat {
-                background: rgba(0, 0, 0, 0.2);
-                border-radius: 10px;
-                padding: 12px;
+
+            .io-item {
+                background: rgba(13, 17, 23, 0.6);
+                border-radius: 4px;
+                padding: 10px;
                 text-align: center;
             }
-            
-            .io-stat.read {
-                border-left: 3px solid #4ade80;
-            }
-            
-            .io-stat.write {
-                border-left: 3px solid #f97316;
-            }
-            
-            .io-icon {
-                font-size: 18px;
-            }
-            
+
             .io-label {
+                font-size: 10px;
+                color: #8b949e;
                 display: block;
-                font-size: 11px;
-                color: #888;
-                margin: 4px 0;
+                margin-bottom: 4px;
             }
-            
-            .io-value {
-                font-size: 16px;
+
+            .io-val {
+                font-size: 14px;
                 font-weight: 600;
-                font-family: 'JetBrains Mono', monospace;
-                color: #e0e0e0;
+                color: #c9d1d9;
+                font-family: 'SF Mono', 'Fira Code', monospace;
             }
-            
-            .volumes-list {
-                margin-top: 15px;
+
+            .volumes {
+                margin-top: 12px;
                 display: grid;
+                gap: 6px;
+            }
+
+            .vol-item {
+                display: grid;
+                grid-template-columns: 60px 1fr 80px;
                 gap: 8px;
-            }
-            
-            .volume-item {
-                display: grid;
-                grid-template-columns: auto 1fr auto;
-                gap: 10px;
                 align-items: center;
-                padding: 10px;
-                background: rgba(0, 0, 0, 0.2);
-                border-radius: 8px;
-                font-size: 12px;
+                padding: 8px;
+                background: rgba(13, 17, 23, 0.6);
+                border-radius: 4px;
+                font-size: 11px;
             }
-            
-            .volume-mount {
-                color: #60a5fa;
-                font-weight: 500;
-                font-family: 'JetBrains Mono', monospace;
+
+            .vol-mount {
+                color: #58a6ff;
+                font-family: 'SF Mono', 'Fira Code', monospace;
             }
-            
-            .volume-bar {
-                height: 6px;
-                background: rgba(255, 255, 255, 0.1);
-                border-radius: 3px;
+
+            .vol-bar {
+                height: 4px;
+                background: rgba(48, 54, 61, 0.6);
+                border-radius: 2px;
                 overflow: hidden;
             }
-            
-            .volume-fill {
+
+            .vol-fill {
                 height: 100%;
-                background: linear-gradient(90deg, #4ade80, #22c55e);
-                border-radius: 3px;
+                border-radius: 2px;
             }
-            
-            .volume-info {
-                color: #888;
-                font-family: 'JetBrains Mono', monospace;
-                white-space: nowrap;
+
+            .vol-info {
+                color: #8b949e;
+                text-align: right;
+                font-family: 'SF Mono', 'Fira Code', monospace;
             }
-            
-            .os-info-panel {
-                background: linear-gradient(145deg, rgba(35, 35, 45, 0.95), rgba(25, 25, 35, 0.95));
-                border-radius: 16px;
-                padding: 20px;
-                margin-bottom: 20px;
-                border: 1px solid rgba(255, 255, 255, 0.08);
+
+            .sysmon-section {
+                background: rgba(22, 27, 34, 0.8);
+                border: 1px solid rgba(48, 54, 61, 0.8);
+                border-radius: 6px;
+                padding: 16px;
+                margin-bottom: 16px;
             }
-            
-            .os-info-header {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                font-size: 16px;
-                font-weight: 600;
-                color: #fff;
-                margin-bottom: 20px;
-            }
-            
-            .os-info-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                gap: 15px;
-            }
-            
-            .os-item {
-                background: rgba(0, 0, 0, 0.2);
-                border-radius: 10px;
-                padding: 12px 15px;
-            }
-            
-            .os-label {
-                display: block;
-                font-size: 11px;
-                color: #888;
-                margin-bottom: 5px;
-            }
-            
-            .os-value {
-                font-size: 14px;
-                color: #e0e0e0;
-                font-weight: 500;
-            }
-            
-            .os-value.uptime {
-                color: #4ade80;
-                font-family: 'JetBrains Mono', monospace;
-            }
-            
-            .processes-panel {
-                background: linear-gradient(145deg, rgba(35, 35, 45, 0.95), rgba(25, 25, 35, 0.95));
-                border-radius: 16px;
-                padding: 20px;
-                margin-bottom: 20px;
-                border: 1px solid rgba(255, 255, 255, 0.08);
-            }
-            
-            .processes-header {
+
+            .section-head {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                margin-bottom: 15px;
-                flex-wrap: wrap;
-                gap: 10px;
+                margin-bottom: 12px;
             }
-            
-            .processes-title {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                font-size: 16px;
+
+            .section-title {
+                font-size: 13px;
                 font-weight: 600;
-                color: #fff;
+                color: #c9d1d9;
             }
-            
-            .process-count {
-                background: rgba(96, 165, 250, 0.2);
-                color: #60a5fa;
-                padding: 2px 10px;
-                border-radius: 12px;
+
+            .section-count {
+                background: rgba(56, 139, 253, 0.15);
+                color: #58a6ff;
+                padding: 2px 8px;
+                border-radius: 10px;
+                font-size: 11px;
+                font-weight: 500;
+            }
+
+            .os-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                gap: 10px;
+            }
+
+            .os-item {
+                background: rgba(13, 17, 23, 0.6);
+                border-radius: 4px;
+                padding: 10px;
+            }
+
+            .os-lbl {
+                font-size: 10px;
+                color: #8b949e;
+                display: block;
+                margin-bottom: 4px;
+            }
+
+            .os-val {
+                font-size: 12px;
+                color: #c9d1d9;
+            }
+
+            .os-val.mono {
+                font-family: 'SF Mono', 'Fira Code', monospace;
+                color: #3fb950;
+            }
+
+            .proc-controls {
+                display: flex;
+                gap: 8px;
+                margin-bottom: 12px;
+            }
+
+            .proc-search {
+                flex: 1;
+                padding: 6px 10px;
+                background: rgba(13, 17, 23, 0.6);
+                border: 1px solid rgba(48, 54, 61, 0.8);
+                border-radius: 6px;
+                color: #c9d1d9;
                 font-size: 12px;
             }
-            
-            .process-controls {
-                display: flex;
-                gap: 10px;
-            }
-            
-            .process-search {
-                padding: 8px 12px;
-                background: rgba(0, 0, 0, 0.3);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 8px;
-                color: #e0e0e0;
-                font-size: 13px;
-                width: 150px;
-            }
-            
-            .process-search:focus {
+
+            .proc-search:focus {
                 outline: none;
-                border-color: rgba(96, 165, 250, 0.5);
+                border-color: #58a6ff;
             }
-            
-            #processSortSelect {
-                padding: 8px 12px;
-                background: rgba(0, 0, 0, 0.3);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 8px;
-                color: #e0e0e0;
-                font-size: 13px;
+
+            .proc-sort {
+                padding: 6px 10px;
+                background: rgba(13, 17, 23, 0.6);
+                border: 1px solid rgba(48, 54, 61, 0.8);
+                border-radius: 6px;
+                color: #c9d1d9;
+                font-size: 12px;
                 cursor: pointer;
             }
-            
-            .processes-table {
-                border-radius: 10px;
+
+            .proc-table {
+                border-radius: 6px;
                 overflow: hidden;
             }
-            
-            .process-table-header {
+
+            .proc-head {
                 display: grid;
-                grid-template-columns: 2fr 80px 80px 80px 120px 80px;
-                gap: 10px;
-                padding: 12px 15px;
-                background: rgba(0, 0, 0, 0.3);
-                font-size: 12px;
+                grid-template-columns: 2fr 70px 70px 70px 100px 70px;
+                gap: 8px;
+                padding: 8px 12px;
+                background: rgba(13, 17, 23, 0.8);
+                font-size: 11px;
                 font-weight: 600;
-                color: #888;
+                color: #8b949e;
                 text-transform: uppercase;
             }
-            
-            .process-list {
-                max-height: 400px;
+
+            .proc-list {
+                max-height: 300px;
                 overflow-y: auto;
             }
-            
-            .process-row {
+
+            .proc-row {
                 display: grid;
-                grid-template-columns: 2fr 80px 80px 80px 120px 80px;
-                gap: 10px;
-                padding: 10px 15px;
-                font-size: 13px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-                transition: background 0.2s;
+                grid-template-columns: 2fr 70px 70px 70px 100px 70px;
+                gap: 8px;
+                padding: 8px 12px;
+                font-size: 12px;
+                border-bottom: 1px solid rgba(48, 54, 61, 0.3);
             }
-            
-            .process-row:hover {
-                background: rgba(255, 255, 255, 0.03);
+
+            .proc-row:hover {
+                background: rgba(48, 54, 61, 0.2);
             }
-            
-            .process-row .col-name {
-                color: #e0e0e0;
+
+            .proc-row .col-name {
+                color: #c9d1d9;
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
             }
-            
-            .process-row .col-pid {
-                color: #888;
-                font-family: 'JetBrains Mono', monospace;
+
+            .proc-row .col-pid {
+                color: #8b949e;
+                font-family: 'SF Mono', 'Fira Code', monospace;
             }
-            
-            .cpu-badge {
-                display: inline-block;
-                padding: 2px 8px;
-                border-radius: 4px;
-                font-size: 11px;
+
+            .cpu-tag {
+                padding: 2px 6px;
+                border-radius: 3px;
+                font-size: 10px;
                 font-weight: 600;
-                font-family: 'JetBrains Mono', monospace;
+                font-family: 'SF Mono', 'Fira Code', monospace;
             }
-            
-            .state-badge {
-                display: inline-block;
-                padding: 2px 8px;
-                border-radius: 4px;
+
+            .state-tag {
+                padding: 2px 6px;
+                border-radius: 3px;
                 font-size: 10px;
                 text-transform: uppercase;
             }
-            
-            .state-badge.running {
-                background: rgba(74, 222, 128, 0.2);
-                color: #4ade80;
+
+            .state-tag.running {
+                background: rgba(63, 185, 80, 0.15);
+                color: #3fb950;
             }
-            
-            .state-badge.sleeping {
-                background: rgba(96, 165, 250, 0.2);
-                color: #60a5fa;
+
+            .state-tag.sleeping {
+                background: rgba(88, 166, 255, 0.15);
+                color: #58a6ff;
             }
-            
-            .drivers-panel {
-                background: linear-gradient(145deg, rgba(35, 35, 45, 0.95), rgba(25, 25, 35, 0.95));
-                border-radius: 16px;
-                padding: 20px;
-                border: 1px solid rgba(255, 255, 255, 0.08);
+
+            .proc-empty {
+                padding: 24px;
+                text-align: center;
+                color: #8b949e;
+                font-size: 12px;
             }
-            
-            .drivers-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 15px;
+
+            .drivers-list {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+                gap: 10px;
             }
-            
-            .drivers-title {
+
+            .drv-item {
                 display: flex;
                 align-items: center;
                 gap: 10px;
-                font-size: 16px;
-                font-weight: 600;
-                color: #fff;
+                padding: 10px;
+                background: rgba(13, 17, 23, 0.6);
+                border-radius: 6px;
+                border-left: 2px solid #3fb950;
             }
-            
-            .check-updates-btn {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                padding: 8px 16px;
-                background: rgba(96, 165, 250, 0.2);
-                border: 1px solid rgba(96, 165, 250, 0.3);
-                border-radius: 8px;
-                color: #60a5fa;
-                cursor: pointer;
-                font-size: 13px;
-                transition: all 0.2s;
+
+            .drv-item.inactive {
+                border-left-color: #484f58;
+                opacity: 0.6;
             }
-            
-            .check-updates-btn:hover {
-                background: rgba(96, 165, 250, 0.3);
-            }
-            
-            .drivers-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-                gap: 12px;
-            }
-            
-            .driver-item {
-                display: flex;
-                align-items: center;
-                gap: 12px;
-                padding: 12px;
-                background: rgba(0, 0, 0, 0.2);
-                border-radius: 10px;
-                border-left: 3px solid #4ade80;
-            }
-            
-            .driver-item.inactive {
-                border-left-color: #888;
-                opacity: 0.7;
-            }
-            
-            .driver-icon {
-                font-size: 24px;
-            }
-            
-            .driver-info {
+
+            .drv-info {
                 flex: 1;
                 min-width: 0;
             }
-            
-            .driver-name {
-                font-size: 13px;
+
+            .drv-name {
+                font-size: 12px;
+                color: #c9d1d9;
                 font-weight: 500;
-                color: #e0e0e0;
             }
-            
-            .driver-model {
+
+            .drv-model {
                 font-size: 11px;
-                color: #888;
+                color: #8b949e;
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
             }
-            
-            .driver-type-badge {
-                padding: 3px 8px;
-                background: rgba(255, 255, 255, 0.1);
-                border-radius: 4px;
+
+            .drv-type {
+                padding: 2px 6px;
+                background: rgba(48, 54, 61, 0.6);
+                border-radius: 3px;
                 font-size: 10px;
-                color: #888;
+                color: #8b949e;
             }
-            
-            .loading-processes, .loading-drivers {
-                padding: 40px;
-                text-align: center;
-                color: #888;
-            }
-            
-            .system-notification {
+
+            .sysmon-toast {
                 position: fixed;
-                bottom: 20px;
-                right: 20px;
-                padding: 12px 20px;
-                border-radius: 10px;
-                font-size: 14px;
+                bottom: 16px;
+                right: 16px;
+                padding: 10px 16px;
+                border-radius: 6px;
+                font-size: 13px;
                 z-index: 10000;
-                animation: slideIn 0.3s ease;
+                animation: toastIn 0.2s ease;
             }
-            
-            .system-notification.success {
-                background: rgba(74, 222, 128, 0.9);
-                color: #000;
-            }
-            
-            .system-notification.error {
-                background: rgba(248, 113, 113, 0.9);
+
+            .sysmon-toast.success {
+                background: rgba(35, 134, 54, 0.9);
                 color: #fff;
             }
-            
-            .system-notification.info {
-                background: rgba(96, 165, 250, 0.9);
+
+            .sysmon-toast.error {
+                background: rgba(248, 81, 73, 0.9);
                 color: #fff;
             }
-            
-            .system-notification.fade-out {
-                animation: slideOut 0.3s ease forwards;
+
+            .sysmon-toast.info {
+                background: rgba(56, 139, 253, 0.9);
+                color: #fff;
             }
-            
-            @keyframes slideIn {
-                from { transform: translateX(100%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
+
+            .sysmon-toast.out {
+                animation: toastOut 0.2s ease forwards;
             }
-            
-            @keyframes slideOut {
-                from { transform: translateX(0); opacity: 1; }
-                to { transform: translateX(100%); opacity: 0; }
+
+            @keyframes toastIn {
+                from { transform: translateY(20px); opacity: 0; }
+                to { transform: translateY(0); opacity: 1; }
+            }
+
+            @keyframes toastOut {
+                from { transform: translateY(0); opacity: 1; }
+                to { transform: translateY(20px); opacity: 0; }
             }
         `;
         document.head.appendChild(style);
@@ -930,97 +753,106 @@ class SystemMonitorReal {
     initCharts() {
         const cpuCanvas = document.getElementById('cpuChart');
         if (cpuCanvas) {
-            this.charts.cpu = {
-                canvas: cpuCanvas,
-                ctx: cpuCanvas.getContext('2d')
-            };
+            this.charts.cpu = { canvas: cpuCanvas, ctx: cpuCanvas.getContext('2d') };
         }
-
         const memCanvas = document.getElementById('memChart');
         if (memCanvas) {
-            this.charts.mem = {
-                canvas: memCanvas,
-                ctx: memCanvas.getContext('2d')
-            };
+            this.charts.mem = { canvas: memCanvas, ctx: memCanvas.getContext('2d') };
         }
     }
 
-    drawChart(chartName, data, color, gradientColor) {
-        const chart = this.charts[chartName];
-        if (!chart || !chart.ctx) return;
+    drawChart(name, data, color) {
+        const chart = this.charts[name];
+        if (!chart?.ctx) return;
 
         const ctx = chart.ctx;
         const w = chart.canvas.width;
         const h = chart.canvas.height;
 
         ctx.clearRect(0, 0, w, h);
-
-        // Фон
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.fillStyle = 'rgba(13, 17, 23, 0.6)';
         ctx.fillRect(0, 0, w, h);
-
-        // Сетка
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
-        ctx.lineWidth = 1;
-        for (let i = 1; i < 4; i++) {
-            const y = (h / 4) * i;
-            ctx.beginPath();
-            ctx.moveTo(0, y);
-            ctx.lineTo(w, y);
-            ctx.stroke();
-        }
 
         if (data.length < 2) return;
 
-        const maxVal = 100;
         const stepX = w / (this.history.maxLength - 1);
-
-        // Градиент заливки
         const gradient = ctx.createLinearGradient(0, 0, 0, h);
-        gradient.addColorStop(0, (gradientColor || color) + '60');
-        gradient.addColorStop(1, (gradientColor || color) + '00');
+        gradient.addColorStop(0, color + '40');
+        gradient.addColorStop(1, color + '00');
 
         ctx.fillStyle = gradient;
         ctx.beginPath();
         ctx.moveTo(0, h);
         data.forEach((val, i) => {
-            const x = i * stepX;
-            const y = h - (val / maxVal) * h * 0.95;
-            ctx.lineTo(x, y);
+            ctx.lineTo(i * stepX, h - (val / 100) * h * 0.9);
         });
         ctx.lineTo((data.length - 1) * stepX, h);
         ctx.closePath();
         ctx.fill();
 
-        // Линия
         ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 1.5;
         ctx.lineJoin = 'round';
-        ctx.lineCap = 'round';
         ctx.beginPath();
         data.forEach((val, i) => {
             const x = i * stepX;
-            const y = h - (val / maxVal) * h * 0.95;
+            const y = h - (val / 100) * h * 0.9;
             if (i === 0) ctx.moveTo(x, y);
             else ctx.lineTo(x, y);
         });
         ctx.stroke();
+    }
 
-        // Точка на конце
-        if (data.length > 0) {
-            const lastX = (data.length - 1) * stepX;
-            const lastY = h - (data[data.length - 1] / maxVal) * h * 0.95;
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
-            ctx.fill();
+    toggleMonitoring() {
+        if (this.monitoringActive) {
+            this.stopMonitoring();
+        } else {
+            this.startMonitoring();
         }
+    }
+
+    startMonitoring() {
+        if (this.monitoringActive) return;
+        this.monitoringActive = true;
+
+        const dot = document.getElementById('statusDot');
+        const status = document.getElementById('monitorStatus');
+        const btn = document.getElementById('toggleBtn');
+        const refreshBtn = document.getElementById('refreshBtn');
+
+        if (dot) dot.classList.add('active');
+        if (status) status.textContent = 'Мониторинг активен';
+        if (btn) { btn.textContent = 'Выключить'; btn.classList.remove('primary'); }
+        if (refreshBtn) refreshBtn.disabled = false;
+
+        this.updateAllData();
+        this.monitoringInterval = setInterval(() => this.updateAllData(), this.updateInterval);
+        console.log('[SystemMonitor] Запущен');
+    }
+
+    stopMonitoring() {
+        if (this.monitoringInterval) {
+            clearInterval(this.monitoringInterval);
+            this.monitoringInterval = null;
+        }
+        this.monitoringActive = false;
+
+        const dot = document.getElementById('statusDot');
+        const status = document.getElementById('monitorStatus');
+        const btn = document.getElementById('toggleBtn');
+        const refreshBtn = document.getElementById('refreshBtn');
+
+        if (dot) dot.classList.remove('active');
+        if (status) status.textContent = 'Мониторинг выключен';
+        if (btn) { btn.textContent = 'Включить'; btn.classList.add('primary'); }
+        if (refreshBtn) refreshBtn.disabled = true;
+
+        console.log('[SystemMonitor] Остановлен');
     }
 
     async updateAllData() {
         if (!window.ipcRenderer) {
-            console.warn('[SystemMonitor] IPC not available');
-            this.showNotification('IPC недоступен - запустите в Electron', 'error');
+            this.showToast('IPC недоступен', 'error');
             return;
         }
 
@@ -1042,57 +874,42 @@ class SystemMonitorReal {
             if (osInfo) this.updateOS(osInfo);
             if (processes) this.updateProcesses(processes);
             if (drivers) this.updateDrivers(drivers);
-
         } catch (e) {
-            console.error('[SystemMonitor] Update error:', e);
+            console.error('[SystemMonitor] Error:', e);
         }
     }
 
     updateCPU(data) {
         const load = parseFloat(data.load) || 0;
-        
         this.history.cpu.push(load);
-        if (this.history.cpu.length > this.history.maxLength) {
-            this.history.cpu.shift();
-        }
+        if (this.history.cpu.length > this.history.maxLength) this.history.cpu.shift();
 
         this.setText('cpuLoad', `${load}%`);
-        this.setText('cpuModel', data.brand || data.model || '-');
-        this.setText('cpuCores', `${data.physicalCores || '-'} / ${data.cores || '-'}`);
-        this.setText('cpuSpeed', `${data.speed || '-'} GHz`);
-        this.setText('cpuTemp', data.temp > 0 ? `${data.temp}°C` : '-');
+        this.setText('cpuModel', data.brand || data.model || '—');
+        this.setText('cpuCores', `${data.physicalCores || '—'} / ${data.cores || '—'}`);
+        this.setText('cpuSpeed', `${data.speed || '—'} GHz`);
+        this.setText('cpuTemp', data.temp > 0 ? `${data.temp}°C` : '—');
 
-        // Загрузка ядер
-        const coreLoadsEl = document.getElementById('coreLoads');
-        if (coreLoadsEl && data.coreLoads && data.coreLoads.length > 0) {
-            coreLoadsEl.innerHTML = data.coreLoads.slice(0, 8).map((load, i) => `
-                <div class="core-load-item">
-                    <span class="core-label">Ядро ${i}</span>
-                    <div class="core-bar">
-                        <div class="core-fill" style="width: ${load}%; background: ${this.getLoadColor(parseFloat(load))}"></div>
-                    </div>
-                    <span class="core-value" style="color: ${this.getLoadColor(parseFloat(load))}">${load}%</span>
+        const coreLoads = document.getElementById('coreLoads');
+        if (coreLoads && data.coreLoads?.length) {
+            coreLoads.innerHTML = data.coreLoads.slice(0, 8).map((l, i) => `
+                <div class="core-item">
+                    <span class="core-lbl">${i}</span>
+                    <div class="core-bar"><div class="core-fill" style="width:${l}%;background:${this.getColor(parseFloat(l))}"></div></div>
+                    <span class="core-val" style="color:${this.getColor(parseFloat(l))}">${l}%</span>
                 </div>
             `).join('');
         }
 
-        this.drawChart('cpu', this.history.cpu, '#4ade80', '#22c55e');
-        
-        const valueEl = document.getElementById('cpuLoad');
-        if (valueEl) {
-            valueEl.style.color = this.getLoadColor(load);
-        }
-
-        this.lastUpdate.cpu = data;
+        this.drawChart('cpu', this.history.cpu, '#3fb950');
+        const el = document.getElementById('cpuLoad');
+        if (el) el.style.color = this.getColor(load);
     }
 
     updateMemory(data) {
         const percent = parseFloat(data.percent) || 0;
-        
         this.history.mem.push(percent);
-        if (this.history.mem.length > this.history.maxLength) {
-            this.history.mem.shift();
-        }
+        if (this.history.mem.length > this.history.maxLength) this.history.mem.shift();
 
         this.setText('memPercent', `${percent}%`);
         this.setText('memUsed', `${data.used} GB`);
@@ -1107,19 +924,13 @@ class SystemMonitorReal {
         const memCacheBar = document.getElementById('memCacheBar');
         if (memCacheBar) memCacheBar.style.width = `${Math.min(cachePercent, 100 - percent)}%`;
 
-        this.drawChart('mem', this.history.mem, '#60a5fa', '#3b82f6');
-
-        const valueEl = document.getElementById('memPercent');
-        if (valueEl) {
-            valueEl.style.color = this.getLoadColor(percent);
-        }
-
-        this.lastUpdate.mem = data;
+        this.drawChart('mem', this.history.mem, '#58a6ff');
+        const el = document.getElementById('memPercent');
+        if (el) el.style.color = this.getColor(percent);
     }
 
     updateDisk(data) {
         const percent = parseFloat(data.percent) || 0;
-
         this.setText('diskPercent', `${percent}%`);
         this.setText('diskUsed', `${data.used} GB`);
         this.setText('diskTotal', `${data.total} GB`);
@@ -1129,54 +940,43 @@ class SystemMonitorReal {
         const volumesList = document.getElementById('volumesList');
         if (volumesList && data.volumes) {
             volumesList.innerHTML = data.volumes.slice(0, 4).map(v => `
-                <div class="volume-item">
-                    <span class="volume-mount">${v.mount}</span>
-                    <div class="volume-bar">
-                        <div class="volume-fill" style="width: ${v.percent}%; background: ${this.getLoadColor(parseFloat(v.percent))}"></div>
-                    </div>
-                    <span class="volume-info">${v.used}/${v.size} GB</span>
+                <div class="vol-item">
+                    <span class="vol-mount">${v.mount}</span>
+                    <div class="vol-bar"><div class="vol-fill" style="width:${v.percent}%;background:${this.getColor(parseFloat(v.percent))}"></div></div>
+                    <span class="vol-info">${v.used}/${v.size}GB</span>
                 </div>
             `).join('');
         }
 
-        this.lastUpdate.disk = data;
+        const el = document.getElementById('diskPercent');
+        if (el) el.style.color = this.getColor(percent);
     }
 
     updateGPU(data) {
         const gpu = Array.isArray(data) ? data[0] : data;
         if (!gpu) return;
 
-        this.setText('gpuModel', gpu.model || '-');
-        this.setText('gpuBrand', gpu.brand || '-');
-        this.setText('gpuVram', gpu.vram ? `${gpu.vram} MB` : '-');
-        this.setText('gpuTemp', gpu.temperature ? `${gpu.temperature}°C` : '-');
-        this.setText('gpuUsage', gpu.utilizationGpu ? `${gpu.utilizationGpu}%` : '-');
-        this.setText('gpuMemUsage', gpu.utilizationMemory ? `${gpu.utilizationMemory}%` : '-');
-        this.setText('gpuFan', gpu.fanSpeed ? `${gpu.fanSpeed}%` : '-');
-
-        this.lastUpdate.gpu = data;
+        this.setText('gpuModel', gpu.model || '—');
+        this.setText('gpuBrand', gpu.brand || '—');
+        this.setText('gpuVram', gpu.vram ? `${gpu.vram} MB` : '—');
+        this.setText('gpuTemp', gpu.temperature ? `${gpu.temperature}°C` : '—');
+        this.setText('gpuUsage', gpu.utilizationGpu ? `${gpu.utilizationGpu}%` : '—');
+        this.setText('gpuMemUsage', gpu.utilizationMemory ? `${gpu.utilizationMemory}%` : '—');
+        this.setText('gpuFan', gpu.fanSpeed ? `${gpu.fanSpeed}%` : '—');
     }
 
     updateOS(data) {
         this.setText('osName', `${data.distro || data.platform}`);
-        this.setText('osVersion', data.release || '-');
-        this.setText('osKernel', data.kernel || '-');
-        this.setText('osArch', data.arch || '-');
-        this.setText('osHostname', data.hostname || '-');
+        this.setText('osVersion', data.release || '—');
+        this.setText('osKernel', data.kernel || '—');
+        this.setText('osArch', data.arch || '—');
+        this.setText('osHostname', data.hostname || '—');
 
-        const uptimeSec = data.uptime || 0;
-        const days = Math.floor(uptimeSec / 86400);
-        const hours = Math.floor((uptimeSec % 86400) / 3600);
-        const mins = Math.floor((uptimeSec % 3600) / 60);
-        this.setText('osUptime', `${days}д ${hours}ч ${mins}м`);
-
-        if (data.hasBattery) {
-            const batteryItem = document.getElementById('batteryItem');
-            if (batteryItem) batteryItem.style.display = 'block';
-            this.setText('osBattery', `${data.batteryPercent}% ${data.isCharging ? '⚡' : '🔋'}`);
-        }
-
-        this.lastUpdate.os = data;
+        const uptime = data.uptime || 0;
+        const d = Math.floor(uptime / 86400);
+        const h = Math.floor((uptime % 86400) / 3600);
+        const m = Math.floor((uptime % 3600) / 60);
+        this.setText('osUptime', `${d}d ${h}h ${m}m`);
     }
 
     updateProcesses(processes) {
@@ -1191,31 +991,25 @@ class SystemMonitorReal {
 
         if (countEl) countEl.textContent = processes.length;
 
-        if (processes.length === 0) {
-            list.innerHTML = '<div class="loading-processes">Нет процессов</div>';
+        if (!processes.length) {
+            list.innerHTML = '<div class="proc-empty">Нет данных</div>';
             return;
         }
 
         list.innerHTML = processes.slice(0, 20).map(p => `
-            <div class="process-row">
-                <div class="col-name" title="${this.escapeHtml(p.name)}">${this.escapeHtml(p.name)}</div>
+            <div class="proc-row">
+                <div class="col-name" title="${this.esc(p.name)}">${this.esc(p.name)}</div>
                 <div class="col-pid">${p.pid}</div>
-                <div class="col-cpu">
-                    <span class="cpu-badge" style="background: ${this.getLoadColor(parseFloat(p.cpu))}20; color: ${this.getLoadColor(parseFloat(p.cpu))}">${p.cpu}%</span>
-                </div>
+                <div class="col-cpu"><span class="cpu-tag" style="background:${this.getColor(parseFloat(p.cpu))}20;color:${this.getColor(parseFloat(p.cpu))}">${p.cpu}%</span></div>
                 <div class="col-mem">${p.mem}%</div>
-                <div class="col-user">${this.escapeHtml(p.user || '-')}</div>
-                <div class="col-state">
-                    <span class="state-badge ${p.state === 'running' ? 'running' : 'sleeping'}">${p.state || '-'}</span>
-                </div>
+                <div class="col-user">${this.esc(p.user || '—')}</div>
+                <div class="col-state"><span class="state-tag ${p.state === 'running' ? 'running' : 'sleeping'}">${p.state || '—'}</span></div>
             </div>
         `).join('');
     }
 
     sortProcesses(by) {
-        this.sortBy = by;
         if (!this.currentProcesses) return;
-        
         const sorted = [...this.currentProcesses].sort((a, b) => {
             if (by === 'mem') return parseFloat(b.mem) - parseFloat(a.mem);
             if (by === 'cpu') return parseFloat(b.cpu) - parseFloat(a.cpu);
@@ -1223,18 +1017,14 @@ class SystemMonitorReal {
             if (by === 'pid') return a.pid - b.pid;
             return 0;
         });
-        
         this.renderProcesses(sorted);
     }
 
-    filterProcesses(query) {
+    filterProcesses(q) {
         if (!this.currentProcesses) return;
-        
         const filtered = this.currentProcesses.filter(p => 
-            p.name.toLowerCase().includes(query.toLowerCase()) ||
-            p.pid.toString().includes(query)
+            p.name.toLowerCase().includes(q.toLowerCase()) || p.pid.toString().includes(q)
         );
-        
         this.renderProcesses(filtered);
     }
 
@@ -1242,40 +1032,36 @@ class SystemMonitorReal {
         const list = document.getElementById('driversList');
         if (!list) return;
 
-        if (!drivers || drivers.length === 0) {
-            list.innerHTML = '<div class="loading-drivers">Драйверы не найдены</div>';
+        if (!drivers?.length) {
+            list.innerHTML = '<div class="proc-empty">Нет данных</div>';
             return;
         }
 
         list.innerHTML = drivers.map(d => `
-            <div class="driver-item ${d.status === 'Активен' || d.status === 'Подключено' ? '' : 'inactive'}">
-                <div class="driver-icon">${this.getDriverIcon(d.type)}</div>
-                <div class="driver-info">
-                    <div class="driver-name">${this.escapeHtml(d.name)}</div>
-                    <div class="driver-model">${this.escapeHtml(d.model)}</div>
+            <div class="drv-item ${d.status === 'Активен' || d.status === 'Подключено' ? '' : 'inactive'}">
+                <div class="drv-info">
+                    <div class="drv-name">${this.esc(d.name)}</div>
+                    <div class="drv-model">${this.esc(d.model)}</div>
                 </div>
-                <div class="driver-type-badge">${d.type}</div>
+                <div class="drv-type">${d.type}</div>
             </div>
         `).join('');
-
-        this.lastUpdate.drivers = drivers;
     }
 
-    getDriverIcon(type) {
-        const icons = {
-            'GPU': '🎮',
-            'Network': '🌐',
-            'USB': '🔌',
-            'Audio': '🔊',
-            'System': '⚙️'
-        };
-        return icons[type] || '📦';
+    async checkForUpdates() {
+        this.showToast('Проверка драйверов...', 'info');
+        try {
+            const result = await window.ipcRenderer.invoke('check-driver-updates');
+            this.showToast(result.hasUpdates ? 'Есть обновления' : 'Всё актуально', result.hasUpdates ? 'info' : 'success');
+        } catch (e) {
+            this.showToast('Ошибка проверки', 'error');
+        }
     }
 
-    getLoadColor(load) {
-        if (load < 50) return '#4ade80';
-        if (load < 75) return '#fbbf24';
-        return '#f87171';
+    getColor(v) {
+        if (v < 50) return '#3fb950';
+        if (v < 75) return '#d29922';
+        return '#f85149';
     }
 
     setText(id, text) {
@@ -1283,76 +1069,25 @@ class SystemMonitorReal {
         if (el) el.textContent = text;
     }
 
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text || '';
-        return div.innerHTML;
+    esc(t) {
+        const d = document.createElement('div');
+        d.textContent = t || '';
+        return d.innerHTML;
     }
 
-    async checkForUpdates() {
-        try {
-            this.showNotification('Проверка обновлений...', 'info');
-            const result = await window.ipcRenderer.invoke('check-driver-updates');
-            
-            if (result.hasUpdates) {
-                this.showNotification('Доступны обновления драйверов', 'warning');
-            } else {
-                this.showNotification('Все драйверы актуальны', 'success');
-            }
-        } catch (e) {
-            this.showNotification('Ошибка проверки', 'error');
-        }
-    }
-
-    toggleMonitoring() {
-        const indicator = document.getElementById('statusIndicator');
-        const btn = document.getElementById('toggleMonitoring');
-        
-        if (this.monitoringActive) {
-            this.stopMonitoring();
-            this.setText('monitorStatus', 'Мониторинг приостановлен');
-            if (indicator) indicator.classList.remove('active');
-            if (btn) btn.innerHTML = '<span class="btn-icon">▶</span> Запустить';
-        } else {
-            this.startMonitoring();
-            this.setText('monitorStatus', 'Мониторинг активен');
-            if (indicator) indicator.classList.add('active');
-            if (btn) btn.innerHTML = '<span class="btn-icon">⏸</span> Пауза';
-        }
-    }
-
-    startMonitoring() {
-        if (this.monitoringActive) return;
-        this.monitoringActive = true;
-        console.log('[SystemMonitor] Мониторинг запущен');
-        
-        this.monitoringInterval = setInterval(() => {
-            this.updateAllData();
-        }, this.updateInterval);
-    }
-
-    stopMonitoring() {
-        if (this.monitoringInterval) {
-            clearInterval(this.monitoringInterval);
-            this.monitoringInterval = null;
-        }
-        this.monitoringActive = false;
-        console.log('[SystemMonitor] Мониторинг остановлен');
-    }
-
-    showNotification(message, type = 'info') {
-        const existing = document.querySelector('.system-notification');
+    showToast(msg, type = 'info') {
+        const existing = document.querySelector('.sysmon-toast');
         if (existing) existing.remove();
 
-        const notification = document.createElement('div');
-        notification.className = `system-notification ${type}`;
-        notification.textContent = message;
-        document.body.appendChild(notification);
+        const toast = document.createElement('div');
+        toast.className = `sysmon-toast ${type}`;
+        toast.textContent = msg;
+        document.body.appendChild(toast);
 
         setTimeout(() => {
-            notification.classList.add('fade-out');
-            setTimeout(() => notification.remove(), 300);
-        }, 3000);
+            toast.classList.add('out');
+            setTimeout(() => toast.remove(), 200);
+        }, 2500);
     }
 
     dispose() {
