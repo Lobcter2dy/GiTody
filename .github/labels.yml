@@ -1,0 +1,80 @@
+# Priority labels
+- name: 'priority: critical'
+  color: 'b60205'
+  description: 'Critical priority'
+
+- name: 'priority: high'
+  color: 'd93f0b'
+  description: 'High priority'
+
+- name: 'priority: medium'
+  color: 'fbca04'
+  description: 'Medium priority'
+
+- name: 'priority: low'
+  color: '0e8a16'
+  description: 'Low priority'
+
+# Type labels
+- name: 'type: bug'
+  color: 'd73a4a'
+  description: 'Something is not working'
+
+- name: 'type: feature'
+  color: 'a2eeef'
+  description: 'New feature request'
+
+- name: 'type: enhancement'
+  color: '84b6eb'
+  description: 'Improvement of existing feature'
+
+- name: 'type: documentation'
+  color: '0075ca'
+  description: 'Documentation improvements'
+
+- name: 'type: question'
+  color: 'd876e3'
+  description: 'Further information is requested'
+
+# Status labels
+- name: 'status: in progress'
+  color: 'fbca04'
+  description: 'Work in progress'
+
+- name: 'status: needs review'
+  color: '1d76db'
+  description: 'Needs review'
+
+- name: 'status: blocked'
+  color: 'b60205'
+  description: 'Blocked by other issue'
+
+# Platform labels
+- name: 'platform: windows'
+  color: '0052cc'
+  description: 'Windows specific'
+
+- name: 'platform: macos'
+  color: '5319e7'
+  description: 'macOS specific'
+
+- name: 'platform: linux'
+  color: 'fbca04'
+  description: 'Linux specific'
+
+# Other
+- name: 'good first issue'
+  color: '7057ff'
+  description: 'Good for newcomers'
+
+- name: 'help wanted'
+  color: '008672'
+  description: 'Extra attention is needed'
+
+- name: 'dependencies'
+  color: '0366d6'
+  description: 'Pull requests that update a dependency'
+
+- name: 'automated'
+  color: 'ededed'
+  description: 'Automated by bots'
