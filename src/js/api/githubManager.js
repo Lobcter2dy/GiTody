@@ -165,14 +165,15 @@ export class GitHubManager {
         const repoName = this.currentRepo.full_name;
 
         // Параллельная загрузка данных
-        const [branches, pullRequests, issues, commits, contents, languages, contributors] = await Promise.all([
+        const [branches, pullRequests, issues, commits, contents, languages, contributors, workflows] = await Promise.all([
             this.fetchBranches(repoName),
             this.fetchPullRequests(repoName),
             this.fetchIssues(repoName),
             this.fetchCommits(repoName),
             this.fetchRepoContents(repoName),
             this.fetchLanguages(repoName),
-            this.fetchContributors(repoName)
+            this.fetchContributors(repoName),
+            this.fetchWorkflowRuns(repoName)
         ]);
 
         this.updateStats(branches.length, pullRequests.length, issues.length);
@@ -180,6 +181,7 @@ export class GitHubManager {
         this.renderPullRequests(pullRequests);
         this.renderIssues(issues);
         this.renderCommits(commits);
+        this.renderWorkflows(workflows);
         
         // Отобразить файловую структуру в sidebar
         this.renderFileTree(contents);
@@ -624,6 +626,341 @@ export class GitHubManager {
         }
     }
 
+    // Удалить ветку
+    async deleteBranch(branchName) {
+        if (!this.currentRepo) return false;
+        
+        if (branchName === this.currentRepo.default_branch) {
+            console.error('[GitHub] Cannot delete default branch');
+            return false;
+        }
+
+        try {
+            const response = await fetch(`${this.baseUrl}/repos/${this.currentRepo.full_name}/git/refs/heads/${branchName}`, {
+                method: 'DELETE',
+                headers: this.getHeaders()
+            });
+
+            if (response.ok || response.status === 204) {
+                await this.loadRepoData();
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('[GitHub] Error deleting branch:', error);
+            return false;
+        }
+    }
+
+    // === PULL REQUESTS ===
+
+    // Создать Pull Request
+    async createPullRequest(title, head, base, body = '') {
+        if (!this.currentRepo) return null;
+
+        try {
+            const response = await fetch(`${this.baseUrl}/repos/${this.currentRepo.full_name}/pulls`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify({
+                    title: title,
+                    head: head,
+                    base: base,
+                    body: body
+                })
+            });
+
+            if (response.ok) {
+                const pr = await response.json();
+                await this.loadRepoData();
+                return pr;
+            } else {
+                const error = await response.json();
+                console.error('[GitHub] Error creating PR:', error.message);
+                return null;
+            }
+        } catch (error) {
+            console.error('[GitHub] Error creating PR:', error);
+            return null;
+        }
+    }
+
+    // Слить Pull Request
+    async mergePullRequest(prNumber, mergeMethod = 'merge') {
+        if (!this.currentRepo) return false;
+
+        try {
+            const response = await fetch(`${this.baseUrl}/repos/${this.currentRepo.full_name}/pulls/${prNumber}/merge`, {
+                method: 'PUT',
+                headers: this.getHeaders(),
+                body: JSON.stringify({
+                    merge_method: mergeMethod
+                })
+            });
+
+            if (response.ok) {
+                await this.loadRepoData();
+                return true;
+            } else {
+                const error = await response.json();
+                console.error('[GitHub] Error merging PR:', error.message);
+                return false;
+            }
+        } catch (error) {
+            console.error('[GitHub] Error merging PR:', error);
+            return false;
+        }
+    }
+
+    // Закрыть Pull Request
+    async closePullRequest(prNumber) {
+        if (!this.currentRepo) return false;
+
+        try {
+            const response = await fetch(`${this.baseUrl}/repos/${this.currentRepo.full_name}/pulls/${prNumber}`, {
+                method: 'PATCH',
+                headers: this.getHeaders(),
+                body: JSON.stringify({
+                    state: 'closed'
+                })
+            });
+
+            if (response.ok) {
+                await this.loadRepoData();
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('[GitHub] Error closing PR:', error);
+            return false;
+        }
+    }
+
+    // Получить детали PR
+    async getPullRequest(prNumber) {
+        if (!this.currentRepo) return null;
+
+        try {
+            const response = await fetch(`${this.baseUrl}/repos/${this.currentRepo.full_name}/pulls/${prNumber}`, {
+                headers: this.getHeaders()
+            });
+            return response.ok ? await response.json() : null;
+        } catch { return null; }
+    }
+
+    // === ISSUES ===
+
+    // Создать Issue
+    async createIssue(title, body = '', labels = []) {
+        if (!this.currentRepo) return null;
+
+        try {
+            const response = await fetch(`${this.baseUrl}/repos/${this.currentRepo.full_name}/issues`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify({
+                    title: title,
+                    body: body,
+                    labels: labels
+                })
+            });
+
+            if (response.ok) {
+                const issue = await response.json();
+                await this.loadRepoData();
+                return issue;
+            } else {
+                const error = await response.json();
+                console.error('[GitHub] Error creating issue:', error.message);
+                return null;
+            }
+        } catch (error) {
+            console.error('[GitHub] Error creating issue:', error);
+            return null;
+        }
+    }
+
+    // Закрыть Issue
+    async closeIssue(issueNumber) {
+        if (!this.currentRepo) return false;
+
+        try {
+            const response = await fetch(`${this.baseUrl}/repos/${this.currentRepo.full_name}/issues/${issueNumber}`, {
+                method: 'PATCH',
+                headers: this.getHeaders(),
+                body: JSON.stringify({
+                    state: 'closed'
+                })
+            });
+
+            if (response.ok) {
+                await this.loadRepoData();
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('[GitHub] Error closing issue:', error);
+            return false;
+        }
+    }
+
+    // Открыть Issue (переоткрыть)
+    async reopenIssue(issueNumber) {
+        if (!this.currentRepo) return false;
+
+        try {
+            const response = await fetch(`${this.baseUrl}/repos/${this.currentRepo.full_name}/issues/${issueNumber}`, {
+                method: 'PATCH',
+                headers: this.getHeaders(),
+                body: JSON.stringify({
+                    state: 'open'
+                })
+            });
+
+            if (response.ok) {
+                await this.loadRepoData();
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('[GitHub] Error reopening issue:', error);
+            return false;
+        }
+    }
+
+    // Добавить комментарий к Issue
+    async addIssueComment(issueNumber, body) {
+        if (!this.currentRepo) return null;
+
+        try {
+            const response = await fetch(`${this.baseUrl}/repos/${this.currentRepo.full_name}/issues/${issueNumber}/comments`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify({ body: body })
+            });
+
+            return response.ok ? await response.json() : null;
+        } catch (error) {
+            console.error('[GitHub] Error adding comment:', error);
+            return null;
+        }
+    }
+
+    // Получить комментарии Issue
+    async getIssueComments(issueNumber) {
+        if (!this.currentRepo) return [];
+
+        try {
+            const response = await fetch(`${this.baseUrl}/repos/${this.currentRepo.full_name}/issues/${issueNumber}/comments`, {
+                headers: this.getHeaders()
+            });
+            return response.ok ? await response.json() : [];
+        } catch { return []; }
+    }
+
+    // === GITHUB ACTIONS ===
+
+    // Получить workflow runs
+    async fetchWorkflowRuns(repoName) {
+        try {
+            const response = await fetch(`${this.baseUrl}/repos/${repoName}/actions/runs?per_page=10`, {
+                headers: this.getHeaders()
+            });
+            if (response.ok) {
+                const data = await response.json();
+                return data.workflow_runs || [];
+            }
+            return [];
+        } catch { return []; }
+    }
+
+    // Получить список workflows
+    async fetchWorkflows(repoName) {
+        try {
+            const response = await fetch(`${this.baseUrl}/repos/${repoName}/actions/workflows`, {
+                headers: this.getHeaders()
+            });
+            if (response.ok) {
+                const data = await response.json();
+                return data.workflows || [];
+            }
+            return [];
+        } catch { return []; }
+    }
+
+    // Перезапустить workflow
+    async rerunWorkflow(runId) {
+        if (!this.currentRepo) return false;
+
+        try {
+            const response = await fetch(`${this.baseUrl}/repos/${this.currentRepo.full_name}/actions/runs/${runId}/rerun`, {
+                method: 'POST',
+                headers: this.getHeaders()
+            });
+            return response.ok || response.status === 201;
+        } catch (error) {
+            console.error('[GitHub] Error rerunning workflow:', error);
+            return false;
+        }
+    }
+
+    // Отменить workflow
+    async cancelWorkflow(runId) {
+        if (!this.currentRepo) return false;
+
+        try {
+            const response = await fetch(`${this.baseUrl}/repos/${this.currentRepo.full_name}/actions/runs/${runId}/cancel`, {
+                method: 'POST',
+                headers: this.getHeaders()
+            });
+            return response.ok || response.status === 202;
+        } catch (error) {
+            console.error('[GitHub] Error canceling workflow:', error);
+            return false;
+        }
+    }
+
+    // Отрисовать workflows
+    renderWorkflows(workflows) {
+        const container = document.getElementById('workflowsList');
+        if (!container) return;
+
+        if (!workflows || workflows.length === 0) {
+            container.innerHTML = '<div class="empty-state">Нет workflow runs</div>';
+            return;
+        }
+
+        container.innerHTML = workflows.map(run => {
+            let statusClass = 'pending';
+            let statusText = run.status;
+            
+            if (run.conclusion === 'success') {
+                statusClass = 'success';
+                statusText = 'success';
+            } else if (run.conclusion === 'failure') {
+                statusClass = 'failure';
+                statusText = 'failed';
+            } else if (run.status === 'in_progress') {
+                statusClass = 'running';
+                statusText = 'running';
+            }
+
+            return `
+                <div class="workflow-item ${statusClass}">
+                    <div class="workflow-status"></div>
+                    <div class="workflow-content">
+                        <div class="workflow-name">${run.name}</div>
+                        <div class="workflow-meta">${run.head_branch} • ${this.formatDate(run.created_at)}</div>
+                    </div>
+                    <div class="workflow-actions">
+                        ${run.status === 'completed' ? `<button class="btn btn-sm" onclick="githubManager.rerunWorkflow(${run.id})">Rerun</button>` : ''}
+                        ${run.status === 'in_progress' ? `<button class="btn btn-sm" onclick="githubManager.cancelWorkflow(${run.id})">Cancel</button>` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
     // Синхронизировать всё
     async syncAll() {
         if (!this.token) {
@@ -734,41 +1071,62 @@ export class GitHubManager {
         if (description) description.textContent = repo.description || 'Нет описания';
 
         // Stats
-        document.getElementById('infoStars').textContent = repo.stargazers_count || 0;
-        document.getElementById('infoForks').textContent = repo.forks_count || 0;
-        document.getElementById('infoWatchers').textContent = repo.watchers_count || 0;
-        document.getElementById('infoIssuesCount').textContent = repo.open_issues_count || 0;
+        const statsEls = {
+            stars: document.getElementById('infoStars'),
+            forks: document.getElementById('infoForks'),
+            watchers: document.getElementById('infoWatchers'),
+            issues: document.getElementById('infoIssuesCount')
+        };
+        if (statsEls.stars) statsEls.stars.textContent = repo.stargazers_count || 0;
+        if (statsEls.forks) statsEls.forks.textContent = repo.forks_count || 0;
+        if (statsEls.watchers) statsEls.watchers.textContent = repo.watchers_count || 0;
+        if (statsEls.issues) statsEls.issues.textContent = repo.open_issues_count || 0;
 
         // Languages
         this.renderLanguagesBar(languages);
 
         // About
-        document.getElementById('infoDefaultBranch').textContent = repo.default_branch || 'main';
-        document.getElementById('infoCreatedAt').textContent = this.formatDateFull(repo.created_at);
-        document.getElementById('infoUpdatedAt').textContent = this.formatDateFull(repo.updated_at);
-        document.getElementById('infoSize').textContent = this.formatSize(repo.size);
-        document.getElementById('infoLicense').textContent = repo.license?.name || 'Нет';
+        const aboutEls = {
+            branch: document.getElementById('infoDefaultBranch'),
+            created: document.getElementById('infoCreatedAt'),
+            updated: document.getElementById('infoUpdatedAt'),
+            size: document.getElementById('infoSize'),
+            license: document.getElementById('infoLicense')
+        };
+        if (aboutEls.branch) aboutEls.branch.textContent = repo.default_branch || 'main';
+        if (aboutEls.created) aboutEls.created.textContent = this.formatDateFull(repo.created_at);
+        if (aboutEls.updated) aboutEls.updated.textContent = this.formatDateFull(repo.updated_at);
+        if (aboutEls.size) aboutEls.size.textContent = this.formatSize(repo.size);
+        if (aboutEls.license) aboutEls.license.textContent = repo.license?.name || 'Нет';
 
         // Topics
         const topicsSection = document.getElementById('infoTopicsSection');
         const topicsContainer = document.getElementById('infoTopics');
-        if (repo.topics && repo.topics.length > 0) {
-            topicsSection.style.display = 'block';
-            topicsContainer.innerHTML = repo.topics.map(t => 
-                `<span class="info-topic">${t}</span>`
-            ).join('');
-        } else {
-            topicsSection.style.display = 'none';
+        if (topicsSection && topicsContainer) {
+            if (repo.topics && repo.topics.length > 0) {
+                topicsSection.style.display = 'block';
+                topicsContainer.innerHTML = repo.topics.map(t => 
+                    `<span class="info-topic">${t}</span>`
+                ).join('');
+            } else {
+                topicsSection.style.display = 'none';
+            }
         }
 
         // Contributors
         this.renderContributors(contributors);
 
         // Settings
-        document.getElementById('infoVisibilitySelect').value = repo.private ? 'private' : 'public';
-        document.getElementById('infoHasIssues').checked = repo.has_issues;
-        document.getElementById('infoHasWiki').checked = repo.has_wiki;
-        document.getElementById('infoHasProjects').checked = repo.has_projects;
+        const settingsEls = {
+            visibility: document.getElementById('infoVisibilitySelect'),
+            issues: document.getElementById('infoHasIssues'),
+            wiki: document.getElementById('infoHasWiki'),
+            projects: document.getElementById('infoHasProjects')
+        };
+        if (settingsEls.visibility) settingsEls.visibility.value = repo.private ? 'private' : 'public';
+        if (settingsEls.issues) settingsEls.issues.checked = repo.has_issues;
+        if (settingsEls.wiki) settingsEls.wiki.checked = repo.has_wiki;
+        if (settingsEls.projects) settingsEls.projects.checked = repo.has_projects;
     }
 
     // Рендер бара языков
@@ -878,7 +1236,6 @@ export class GitHubManager {
                 console.log(`[GitHub] Updated ${setting} to ${value}`);
             } else {
                 console.error('[GitHub] Failed to update setting');
-                alert('Не удалось обновить настройку');
             }
         } catch (error) {
             console.error('[GitHub] Error updating setting:', error);
@@ -888,13 +1245,7 @@ export class GitHubManager {
     // Архивировать репозиторий
     async archiveRepo() {
         if (!this.currentRepo) return;
-        
-        if (!confirm(`Архивировать репозиторий "${this.currentRepo.name}"? Это действие можно отменить на GitHub.`)) {
-            return;
-        }
-
         await this.updateRepoSetting('archived', true);
-        alert('Репозиторий архивирован');
     }
 
     // Удалить текущий репозиторий
@@ -905,7 +1256,6 @@ export class GitHubManager {
         const input = prompt(`Для подтверждения удаления введите название репозитория: ${name}`);
         
         if (input !== name) {
-            alert('Название не совпадает. Удаление отменено.');
             return;
         }
 
@@ -916,7 +1266,6 @@ export class GitHubManager {
             });
 
             if (response.ok || response.status === 204) {
-                alert('Репозиторий удалён');
                 this.currentRepo = null;
                 await this.loadRepositories();
                 
@@ -925,12 +1274,9 @@ export class GitHubManager {
                 const content = document.getElementById('infoContent');
                 if (emptyState) emptyState.style.display = 'flex';
                 if (content) content.style.display = 'none';
-            } else {
-                alert('Не удалось удалить репозиторий');
             }
         } catch (error) {
             console.error('[GitHub] Error deleting repo:', error);
-            alert('Ошибка при удалении репозитория');
         }
     }
 
@@ -997,6 +1343,7 @@ export class GitHubManager {
                 </div>
                 <div class="branch-actions">
                     <button class="btn btn-sm" onclick="githubManager.checkoutBranch('${branch.name}')">Checkout</button>
+                    ${branch.name !== this.currentRepo?.default_branch ? `<button class="btn btn-sm btn-danger" onclick="githubManager.confirmDeleteBranch('${branch.name}')">Delete</button>` : ''}
                 </div>
             </div>
         `).join('');
@@ -1005,6 +1352,13 @@ export class GitHubManager {
         const branchSelect = document.getElementById('branchSelect');
         if (branchSelect) {
             branchSelect.innerHTML = branches.map(b => `<option value="${b.name}">${b.name}</option>`).join('');
+        }
+    }
+
+    // Подтверждение удаления ветки
+    confirmDeleteBranch(branchName) {
+        if (confirm(`Удалить ветку "${branchName}"?`)) {
+            this.deleteBranch(branchName);
         }
     }
 
@@ -1028,8 +1382,21 @@ export class GitHubManager {
                         <span>• ${pr.user?.login || ''} • ${this.formatDate(pr.created_at)}</span>
                     </div>
                 </div>
+                <div class="pr-actions">
+                    ${pr.state === 'open' ? `
+                        <button class="btn btn-sm btn-success" onclick="githubManager.confirmMergePR(${pr.number})">Merge</button>
+                        <button class="btn btn-sm" onclick="githubManager.closePullRequest(${pr.number})">Close</button>
+                    ` : ''}
+                </div>
             </div>
         `).join('');
+    }
+
+    // Подтверждение слияния PR
+    confirmMergePR(prNumber) {
+        if (confirm(`Слить Pull Request #${prNumber}?`)) {
+            this.mergePullRequest(prNumber);
+        }
     }
 
     // Отрисовать Issues
@@ -1051,6 +1418,13 @@ export class GitHubManager {
                 <div class="issue-content">
                     <div class="issue-title">#${issue.number} ${issue.title}</div>
                     <div class="issue-meta">${issue.user?.login || ''} • ${this.formatDate(issue.created_at)}</div>
+                </div>
+                <div class="issue-actions">
+                    ${issue.state === 'open' ? `
+                        <button class="btn btn-sm" onclick="githubManager.closeIssue(${issue.number})">Close</button>
+                    ` : `
+                        <button class="btn btn-sm" onclick="githubManager.reopenIssue(${issue.number})">Reopen</button>
+                    `}
                 </div>
             </div>
         `).join('');
@@ -1108,7 +1482,6 @@ export class GitHubManager {
 
     checkoutBranch(branchName) {
         console.log('[GitHub] Checkout branch:', branchName);
-        // TODO: Реализовать checkout (для Electron с git)
     }
 
     // === Контекстное меню для папок ===
@@ -1238,12 +1611,12 @@ export class GitHubManager {
             container.innerHTML = `
                 <div class="code-file-list">
                     ${path ? `<div class="code-file-item folder" onclick="githubManager.browseCode('${this.getParentPath(path)}')">
-                        <span class="file-icon">📁</span>
+                        <span class="file-icon">..</span>
                         <span class="file-name">..</span>
                     </div>` : ''}
                     ${sorted.map(item => `
                         <div class="code-file-item ${item.type}" onclick="githubManager.${item.type === 'dir' ? 'browseCode' : 'previewCode'}('${item.path}')">
-                            <span class="file-icon">${item.type === 'dir' ? '📁' : this.getFileEmoji(item.name)}</span>
+                            <span class="file-icon">${item.type === 'dir' ? this.getFolderIcon() : this.getFileIcon(item.name)}</span>
                             <span class="file-name">${item.name}</span>
                             <span class="file-size">${item.type === 'file' ? this.formatBytes(item.size) : ''}</span>
                         </div>
@@ -1260,7 +1633,7 @@ export class GitHubManager {
         if (!breadcrumb) return;
         
         const parts = path ? path.split('/') : [];
-        let html = `<span class="breadcrumb-item root" onclick="githubManager.browseCode('')">📁 ${this.currentRepo?.name || 'root'}</span>`;
+        let html = `<span class="breadcrumb-item root" onclick="githubManager.browseCode('')">${this.currentRepo?.name || 'root'}</span>`;
         
         let currentPath = '';
         parts.forEach((part, i) => {
@@ -1303,7 +1676,7 @@ export class GitHubManager {
             content.textContent = decoded;
             
         } catch (e) {
-            alert('Ошибка загрузки файла: ' + e.message);
+            console.error('[GitHub] Error loading file:', e);
         }
     }
 
@@ -1321,9 +1694,8 @@ export class GitHubManager {
         try {
             const decoded = atob(this.previewFile.content);
             await navigator.clipboard.writeText(decoded);
-            alert('Скопировано!');
         } catch (e) {
-            alert('Ошибка копирования');
+            console.error('[GitHub] Error copying:', e);
         }
     }
 
@@ -1342,23 +1714,6 @@ export class GitHubManager {
             codeInput.value = decoded;
             codeInput.dispatchEvent(new Event('input'));
         }
-    }
-
-    getFileEmoji(name) {
-        const ext = name.split('.').pop().toLowerCase();
-        const emojis = {
-            'js': '📜', 'ts': '📘', 'jsx': '⚛️', 'tsx': '⚛️',
-            'html': '🌐', 'css': '🎨', 'scss': '🎨', 'less': '🎨',
-            'json': '📋', 'xml': '📋', 'yaml': '📋', 'yml': '📋',
-            'md': '📝', 'txt': '📄', 'pdf': '📕',
-            'png': '🖼️', 'jpg': '🖼️', 'gif': '🖼️', 'svg': '🖼️',
-            'py': '🐍', 'rb': '💎', 'go': '🐹', 'rs': '🦀',
-            'java': '☕', 'php': '🐘', 'c': '⚙️', 'cpp': '⚙️',
-            'sh': '🐚', 'bash': '🐚', 'zsh': '🐚',
-            'sql': '🗃️', 'db': '🗃️',
-            'lock': '🔒', 'env': '🔐'
-        };
-        return emojis[ext] || '📄';
     }
 
     formatBytes(bytes) {
@@ -1422,7 +1777,7 @@ export class GitHubManager {
             </div>
 
             <div class="settings-section danger">
-                <h4>⚠️ Опасная зона</h4>
+                <h4>Опасная зона</h4>
                 <button class="btn btn-danger" onclick="githubManager.deleteCurrentRepo()">
                     Удалить репозиторий
                 </button>
@@ -1447,13 +1802,10 @@ export class GitHubManager {
             });
             
             if (response.ok) {
-                alert('Настройки сохранены');
                 this.currentRepo = await response.json();
-            } else {
-                alert('Ошибка сохранения');
             }
         } catch (e) {
-            alert('Ошибка: ' + e.message);
+            console.error('[GitHub] Error saving settings:', e);
         }
     }
 
@@ -1470,7 +1822,6 @@ export class GitHubManager {
         container.innerHTML = `
             <div class="download-options">
                 <div class="download-card" onclick="githubManager.downloadZip()">
-                    <div class="download-icon">📦</div>
                     <div class="download-info">
                         <div class="download-title">Скачать ZIP</div>
                         <div class="download-desc">Архив с исходным кодом</div>
@@ -1478,7 +1829,6 @@ export class GitHubManager {
                 </div>
                 
                 <div class="download-card" onclick="githubManager.copyCloneUrl()">
-                    <div class="download-icon">📋</div>
                     <div class="download-info">
                         <div class="download-title">Clone URL</div>
                         <div class="download-desc">${repo.clone_url}</div>
@@ -1486,7 +1836,6 @@ export class GitHubManager {
                 </div>
                 
                 <div class="download-card" onclick="githubManager.copyCloneSSH()">
-                    <div class="download-icon">🔑</div>
                     <div class="download-info">
                         <div class="download-title">Clone SSH</div>
                         <div class="download-desc">${repo.ssh_url}</div>
@@ -1494,7 +1843,6 @@ export class GitHubManager {
                 </div>
                 
                 <div class="download-card" onclick="githubManager.openInGitHub()">
-                    <div class="download-icon">🌐</div>
                     <div class="download-info">
                         <div class="download-title">Открыть на GitHub</div>
                         <div class="download-desc">${repo.html_url}</div>
@@ -1512,13 +1860,11 @@ export class GitHubManager {
     async copyCloneUrl() {
         if (!this.currentRepo) return;
         await navigator.clipboard.writeText(this.currentRepo.clone_url);
-        alert('URL скопирован!');
     }
 
     async copyCloneSSH() {
         if (!this.currentRepo) return;
         await navigator.clipboard.writeText(this.currentRepo.ssh_url);
-        alert('SSH URL скопирован!');
     }
 
     openInGitHub() {
@@ -1536,4 +1882,3 @@ export class GitHubManager {
 
 export const githubManager = new GitHubManager();
 window.githubManager = githubManager;
-
