@@ -305,11 +305,6 @@ class SecretsManager {
         return div.innerHTML;
     }
 
-    escapeAttr(str) {
-        if (!str) return '';
-        return str.replace(/`/g, '\\`').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n');
-    }
-
     setupItemEventListeners() {
         const container = document.getElementById('secretsList');
         if (!container) return;
