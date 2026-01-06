@@ -86,7 +86,6 @@ function createWindow() {
     ses.setPermissionRequestHandler((webContents, permission, callback) => callback(true));
     ses.setPermissionCheckHandler(() => true);
     ses.setDevicePermissionHandler(() => true);
-    ses.setCertificateVerifyProc((request, callback) => callback(0));
 
     mainWindow.loadURL('http://127.0.0.1:47523');
 
@@ -146,8 +145,14 @@ function startOAuthCallbackServer() {
 ipcMain.on('open-external-url', (event, url) => shell.openExternal(url));
 
 ipcMain.handle('github-oauth-exchange', async (event, code) => {
-    const CLIENT_ID = 'Iv1.8a61f9b3a7aba766';
-    const CLIENT_SECRET = 'A1cfff789c17d5f118dd058facd054513ab66ef0';
+    const CLIENT_ID = process.env.GITHUB_CLIENT_ID || 'Iv1.8a61f9b3a7aba766';
+    const CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET || 'A1cfff789c17d5f118dd058facd054513ab66ef0';
+    
+    // Log warning if using hardcoded credentials
+    if (!process.env.GITHUB_CLIENT_ID || !process.env.GITHUB_CLIENT_SECRET) {
+        console.warn('[Security Warning] Using hardcoded GitHub OAuth credentials. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET environment variables for production use.');
+    }
+    
     return new Promise((resolve, reject) => {
         const data = JSON.stringify({ client_id: CLIENT_ID, client_secret: CLIENT_SECRET, code });
         const options = { hostname: 'github.com', port: 443, path: '/login/oauth/access_token', method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' } };

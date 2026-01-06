@@ -38,6 +38,53 @@ export class GitHubManager {
         };
     }
 
+    // === UTILITY METHODS ===
+
+    /**
+     * Format date string for display
+     */
+    formatDate(dateString) {
+        if (!dateString) return 'unknown';
+        
+        const date = new Date(dateString);
+        
+        // Check if date is valid
+        if (isNaN(date.getTime())) return 'invalid date';
+        
+        const now = new Date();
+        const diffMs = now - date;
+        
+        // Handle future dates
+        if (diffMs < 0) return 'in the future';
+        
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        
+        if (diffDays === 0) return 'today';
+        if (diffDays === 1) return 'yesterday';
+        if (diffDays < 7) return `${diffDays} days ago`;
+        if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+        if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
+        return `${Math.floor(diffDays / 365)} years ago`;
+    }
+
+    /**
+     * Escape HTML to prevent XSS
+     */
+    escapeHtml(text) {
+        if (typeof text !== 'string') return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    /**
+     * Escape string for use in JavaScript context (onclick attributes, etc.)
+     */
+    escapeJs(text) {
+        if (typeof text !== 'string') return "''";
+        return JSON.stringify(text);
+    }
+
     // === API FETCHERS ===
 
     async fetchApi(endpoint, options = {}) {
@@ -318,58 +365,64 @@ export class GitHubManager {
         if (!el) return;
         el.innerHTML = this.repos.map(r => `
             <div class="sidebar-item ${this.currentRepo?.full_name === r.full_name ? 'active' : ''}" 
-                 onclick="githubManager.selectRepo('${r.full_name}')">
-                ${r.private ? '🔒' : '📁'} ${r.name}
+                 onclick="githubManager.selectRepo(${this.escapeJs(r.full_name)})">
+                ${r.private ? '🔒' : '📁'} ${this.escapeHtml(r.name)}
             </div>
         `).join('');
     }
 
     updateCurrentRepoUI() {
         const title = document.getElementById('headerTitle');
-        if (title && this.currentRepo) title.textContent = this.currentRepo.name;
+        if (title && this.currentRepo) {
+            title.textContent = this.currentRepo.name;
+        }
         this.updateReposList();
     }
 
     renderBranches(list) {
         const el = document.getElementById('branchesList');
-        if (el) el.innerHTML = list.map(b => `<div class="card">${b.name}</div>`).join('');
+        if (el) el.innerHTML = list.map(b => `<div class="card">${this.escapeHtml(b.name)}</div>`).join('');
     }
 
     renderPRs(list) {
         const el = document.getElementById('prList');
         if (!el) return;
-        el.innerHTML = list.map(p => `
+        el.innerHTML = list.map(p => {
+            const prNumber = parseInt(p.number, 10);
+            if (isNaN(prNumber)) return ''; // Skip invalid PR numbers
+            return `
             <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
                 <div>
-                    <b>#${p.number}</b> ${p.title} (${p.state})
-                    <div style="font-size:11px; color:#8b949e">${p.user.login} • ${this.formatDate(p.created_at)}</div>
+                    <b>#${prNumber}</b> ${this.escapeHtml(p.title)} (${this.escapeHtml(p.state)})
+                    <div style="font-size:11px; color:#8b949e">${this.escapeHtml(p.user.login)} • ${this.formatDate(p.created_at)}</div>
                 </div>
-                ${p.state === 'open' ? `<button class="btn btn-sm btn-primary" onclick="githubManager.mergePullRequest(${p.number})">Слить (Merge)</button>` : ''}
+                ${p.state === 'open' ? `<button class="btn btn-sm btn-primary" onclick="githubManager.mergePullRequest(${prNumber})">Слить (Merge)</button>` : ''}
             </div>
-        `).join('');
+        `;
+        }).join('');
     }
 
     renderIssues(list) {
         const el = document.getElementById('issuesList');
-        if (el) el.innerHTML = list.filter(i => !i.pull_request).map(i => `<div class="card">#${i.number} ${i.title}</div>`).join('');
+        if (el) el.innerHTML = list.filter(i => !i.pull_request).map(i => `<div class="card">#${i.number} ${this.escapeHtml(i.title)}</div>`).join('');
     }
 
     renderCommits(list) {
         const el = document.getElementById('commitsList');
-        if (el) el.innerHTML = list.map(c => `<div class="card"><code>${c.sha.slice(0, 7)}</code> ${c.commit.message}</div>`).join('');
+        if (el) el.innerHTML = list.map(c => `<div class="card"><code>${this.escapeHtml(c.sha.slice(0, 7))}</code> ${this.escapeHtml(c.commit.message)}</div>`).join('');
     }
 
     renderReleases(list) {
         const el = document.getElementById('releasesList');
-        if (el) el.innerHTML = list.map(r => `<div class="card"><b>${r.tag_name}</b> ${r.name || ''}</div>`).join('');
+        if (el) el.innerHTML = list.map(r => `<div class="card"><b>${this.escapeHtml(r.tag_name)}</b> ${this.escapeHtml(r.name || '')}</div>`).join('');
     }
 
     renderWorkflows(list) {
         const el = document.getElementById('actionsList');
         if (el) el.innerHTML = list.map(w => `
             <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
-                <span>${w.name}</span>
-                <button class="btn btn-sm" onclick="githubManager.runWorkflow('${w.id}')">Run</button>
+                <span>${this.escapeHtml(w.name)}</span>
+                <button class="btn btn-sm" onclick="githubManager.runWorkflow(${this.escapeJs(w.id)})">Run</button>
             </div>
         `).join('');
     }
@@ -378,8 +431,8 @@ export class GitHubManager {
         const el = document.getElementById('repoFileTree');
         if (!el) return;
         el.innerHTML = list.map(item => `
-            <div class="tree-item" onclick="githubManager.${item.type === 'dir' ? 'toggleFolder' : 'previewFileContent'}('${item.path}')">
-                ${item.type === 'dir' ? '📁' : '📄'} ${item.name}
+            <div class="tree-item" onclick="githubManager.${item.type === 'dir' ? 'toggleFolder' : 'previewFileContent'}(${this.escapeJs(item.path)})">
+                ${item.type === 'dir' ? '📁' : '📄'} ${this.escapeHtml(item.name)}
             </div>
         `).join('');
     }
@@ -387,13 +440,38 @@ export class GitHubManager {
     async previewFileContent(path) {
         if (!this.currentRepo) return;
         const res = await this.fetchApi(`/repos/${this.currentRepo.full_name}/contents/${path}`);
-        if (res.isOk && res.value.content) {
-            const decoded = atob(res.value.content.replace(/\s/g, ''));
+        if (res.isOk && res.value && res.value.content) {
+            const content = res.value.content;
+
+            // GitHub returns base64 with newlines; strip only line breaks and handle decode errors
+            if (typeof content !== 'string') {
+                log.error('Unexpected content type from GitHub contents API for path:', path);
+                alert('Не удалось отобразить содержимое файла: некорректный формат данных от GitHub.');
+                return;
+            }
+
+            if (res.value.encoding && res.value.encoding !== 'base64') {
+                log.error('Unsupported content encoding from GitHub for path:', path, 'encoding:', res.value.encoding);
+                alert('Не удалось отобразить содержимое файла: неподдерживаемый формат кодирования.');
+                return;
+            }
+
+            const normalizedBase64 = content.replace(/\s+/g, '');
+            let decoded;
+            try {
+                decoded = atob(normalizedBase64);
+            } catch (e) {
+                log.error('Failed to decode base64 content from GitHub for path:', path, e);
+                alert('Не удалось декодировать содержимое файла из GitHub.');
+                return;
+            }
+
             const preview = document.getElementById('codePreview');
             const contentArea = document.getElementById('previewContent');
             if (preview && contentArea) {
                 preview.style.display = 'block';
-                document.getElementById('previewFileName').textContent = path;
+                const fileNameEl = document.getElementById('previewFileName');
+                if (fileNameEl) fileNameEl.textContent = path;
                 contentArea.value = decoded;
             }
         }
@@ -442,12 +520,12 @@ export class GitHubManager {
             <div class="repo-info-container" style="padding:20px; background: #161b22; border-radius: 12px; border: 1px solid #30363d;">
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px;">
                     <div>
-                        <h1 style="margin:0; font-size:24px; color:#58a6ff;">${repo.full_name}</h1>
-                        <p style="color:#8b949e; margin:10px 0;">${repo.description || 'Нет описания'}</p>
+                        <h1 style="margin:0; font-size:24px; color:#58a6ff;">${this.escapeHtml(repo.full_name)}</h1>
+                        <p style="color:#8b949e; margin:10px 0;">${this.escapeHtml(repo.description || 'Нет описания')}</p>
                     </div>
                     <div style="display:flex; gap:10px;">
                         <button class="btn btn-sm" onclick="githubManager.syncAll()">Refresh</button>
-                        <a href="${repo.html_url}" target="_blank" class="btn btn-sm" style="background:#30363d;">View on GitHub</a>
+                        <a href="${this.escapeHtml(repo.html_url)}" target="_blank" class="btn btn-sm" style="background:#30363d;">View on GitHub</a>
                     </div>
                 </div>
                 
@@ -507,7 +585,7 @@ export class GitHubManager {
                 <div style="margin-top:30px;">
                     <h3 style="font-size:14px; text-transform:uppercase; color:#8b949e; border-bottom:1px solid #30363d; padding-bottom:10px;">Repository Topics</h3>
                     <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;">
-                        ${repo.topics?.map(t => `<span class="topic-tag" style="background:rgba(88,166,255,0.1); color:#58a6ff; padding:4px 10px; border-radius:12px; font-size:12px;">${t}</span>`).join('') || '<span style="color:#8b949e">Нет тем</span>'}
+                        ${repo.topics?.map(t => `<span class="topic-tag" style="background:rgba(88,166,255,0.1); color:#58a6ff; padding:4px 10px; border-radius:12px; font-size:12px;">${this.escapeHtml(t)}</span>`).join('') || '<span style="color:#8b949e">Нет тем</span>'}
                         <button class="btn btn-sm" style="border-radius:12px;" onclick="githubManager.promptEditTopics()">Edit</button>
                     </div>
                 </div>
