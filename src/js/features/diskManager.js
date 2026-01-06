@@ -42,10 +42,15 @@ class DiskManager {
     }
 
     renderDiskMonitor() {
-        // Найти контейнер в System tab (settings-system секция)
-        let monitorContainer = document.querySelector('#settings-system .disk-monitor-container');
+        // Найти контейнер в System tab (он теперь внутри .system-monitor-container)
+        let monitorContainer = document.querySelector('.disk-monitor-container');
+        
         if (!monitorContainer) {
-            console.error('[DiskManager] Disk monitor container not found');
+            // Если контейнер не найден, проверим активна ли вообще вкладка системного монитора
+            const systemSection = document.getElementById('settings-system');
+            if (systemSection && systemSection.classList.contains('active')) {
+                console.warn('[DiskManager] Disk monitor container not found in active system section');
+            }
             return;
         }
 

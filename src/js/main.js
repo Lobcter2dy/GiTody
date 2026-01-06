@@ -26,7 +26,7 @@ import { repoManager } from './sidebar/repoManager.js';
 import { githubManager } from './api/githubManager.js';
 import { secretsManager } from './features/secretsManager.js';
 import { systemMonitor } from './features/systemMonitor.js';
-import { systemMonitorReal } from './features/systemMonitorReal.js';
+import { networkManager } from './features/networkManager.js';
 import { diskManager } from './features/diskManager.js';
 import { speechManager } from './features/speechManager.js';
 import { aiManager } from './features/aiManager.js';
@@ -45,7 +45,6 @@ window.githubPanelManager = githubPanelManager;
 window.githubManager = githubManager;
 window.secretsManager = secretsManager;
 window.systemMonitor = systemMonitor;
-window.systemMonitorReal = systemMonitorReal;
 window.diskManager = diskManager;
 window.speechManager = speechManager;
 window.aiManager = aiManager;
@@ -67,6 +66,20 @@ async function initApp() {
         // 1. Авторизация
         await githubAuth.init();
         
+        // 1.1 Попытка авто-логина из SecretsManager, если еще не подключен
+        if (!githubAuth.isConnected) {
+            console.log('[App] Attempting auto-login from Secrets...');
+            const githubSecret = secretsManager.items.find(s => 
+                s.type === 'password' && 
+                (s.name.toLowerCase().includes('github') || s.password.startsWith('ghp_'))
+            );
+            
+            if (githubSecret && githubSecret.password) {
+                console.log('[App] Found GitHub secret, connecting...');
+                await githubAuth.connect(githubSecret.password);
+            }
+        }
+        
         // 2. Восстановить вкладку
         const savedTab = session.getActiveTab();
         if (savedTab && navRing) {
@@ -86,7 +99,7 @@ async function initApp() {
         
         // 4. Инициализация модулей (БЕЗ дублирования)
         systemMonitor.init();
-        systemMonitorReal.init();
+        networkManager.init();
         diskManager.init();
         speechManager.init();
         aiManager.init();

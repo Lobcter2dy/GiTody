@@ -4,10 +4,19 @@
 
 import { session } from '../storage/session.js';
 
+/**
+ * NavRing — кольцевая панель навигации по разделам приложения.
+ * tabs — список ключей вкладок, соответствующих DOM id контента.
+ * currentIndex — активный индекс вкладки.
+ * isInitialized — метка, предотвращающая повторную инициализацию.
+ */
 export class NavRing {
     constructor() {
+        /** @type {string[]} */
         this.tabs = ['dashboard', 'github', 'chat', 'editor', 'settings', 'information', 'storage'];
+        /** @type {number} */
         this.currentIndex = 0;
+        /** @type {boolean} */
         this.isInitialized = false;
     }
 
@@ -63,16 +72,26 @@ export class NavRing {
         this.updateActive();
     }
 
+    /**
+     * Переключиться на следующую вкладку по кольцу.
+     */
     next() {
         this.currentIndex = (this.currentIndex + 1) % this.tabs.length;
         this.updateActive();
     }
 
+    /**
+     * Переключиться на предыдущую вкладку по кольцу.
+     */
     prev() {
         this.currentIndex = (this.currentIndex - 1 + this.tabs.length) % this.tabs.length;
         this.updateActive();
     }
 
+    /**
+     * Прямой переход к вкладке по индексу.
+     * @param {number} index — индекс вкладки.
+     */
     goTo(index) {
         if (index >= 0 && index < this.tabs.length) {
             this.currentIndex = index;

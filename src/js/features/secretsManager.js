@@ -7,15 +7,92 @@ const STORAGE_KEY = 'GITODY_SECRETS';
 class SecretsManager {
     constructor() {
         this.items = this.load();
+        this._rawItems = [...this.items]; // Бекап в памяти
         this.init();
+        this.setupPersistenceCheck();
+    }
+
+    setupPersistenceCheck() {
+        // Проверка каждые 10 секунд что данные не пропали из localStorage
+        setInterval(() => {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (this._rawItems.length > 0) {
+                try {
+                    if (!stored || JSON.parse(stored).length === 0) {
+                        console.error('[Secrets] DATA WAS LOST! Restoring from memory...');
+                        this.save();
+                    }
+                } catch (e) {
+                    this.save();
+                }
+            }
+        }, 10000);
     }
 
     init() {
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => this.render());
+            document.addEventListener('DOMContentLoaded', () => {
+                this.render();
+                this.setupContextMenu();
+            });
         } else {
             this.render();
+            this.setupContextMenu();
         }
+    }
+
+    setupContextMenu() {
+        document.addEventListener('contextmenu', (e) => {
+            const item = e.target.closest('.secret-item');
+            if (item) {
+                e.preventDefault();
+                this.showContextMenu(e, item.dataset.id);
+            }
+        });
+
+        document.addEventListener('click', () => this.hideContextMenu());
+    }
+
+    showContextMenu(e, id) {
+        this.hideContextMenu();
+        const item = this.items.find(i => i.id === id);
+        if (!item) return;
+
+        const menu = document.createElement('div');
+        menu.className = 'custom-context-menu';
+        menu.style.left = e.pageX + 'px';
+        menu.style.top = e.pageY + 'px';
+
+        const isPassword = item.type === 'password';
+
+        menu.innerHTML = `
+            <div class="context-menu-item" onclick="secretsManager.copyToClipboard('${this.escapeAttr(isPassword ? item.password : item.content)}')">
+                <span>📋</span> Копировать ${isPassword ? 'пароль' : 'текст'}
+            </div>
+            ${isPassword ? `
+            <div class="context-menu-item" onclick="secretsManager.copyToClipboard('${this.escapeAttr(item.login)}')">
+                <span>👤</span> Копировать логин
+            </div>
+            ` : ''}
+            <div class="context-menu-divider"></div>
+            <div class="context-menu-item" onclick="secretsManager.viewNote('${item.id}')">
+                <span>👁️</span> Открыть / Просмотреть
+            </div>
+            <div class="context-menu-item" onclick="secretsManager.showAddModal()">
+                <span>➕</span> Добавить новое
+            </div>
+            <div class="context-menu-divider"></div>
+            <div class="context-menu-item danger" onclick="secretsManager.confirmDelete('${item.id}')">
+                <span>🗑️</span> Удалить
+            </div>
+        `;
+
+        document.body.appendChild(menu);
+    }
+
+    hideContextMenu() {
+        const existing = document.querySelector('.custom-context-menu');
+        if (existing) existing.remove();
     }
 
     load() {
@@ -28,6 +105,7 @@ class SecretsManager {
     }
 
     save() {
+        this._rawItems = [...this.items];
         localStorage.setItem(STORAGE_KEY, JSON.stringify(this.items));
     }
 
@@ -106,7 +184,7 @@ class SecretsManager {
 
     renderPassword(item) {
         return `
-            <div class="secret-item password" data-id="${item.id}">
+            <div class="secret-item password" data-id="${item.id}" ondblclick="secretsManager.viewPassword('${item.id}')">
                 <div class="secret-icon">
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
                         <circle cx="7" cy="7" r="5"/>
@@ -144,7 +222,7 @@ class SecretsManager {
     renderNote(item) {
         const preview = item.content.length > 50 ? item.content.substring(0, 50) + '...' : item.content;
         return `
-            <div class="secret-item note" data-id="${item.id}">
+            <div class="secret-item note" data-id="${item.id}" ondblclick="secretsManager.viewNote('${item.id}')">
                 <div class="secret-icon note-icon">
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
                         <rect x="3" y="2" width="14" height="16" rx="2"/>
@@ -294,6 +372,51 @@ class SecretsManager {
         setTimeout(() => document.getElementById('noteTitle')?.focus(), 100);
     }
 
+    // Просмотр пароля
+    viewPassword(id) {
+        const item = this.items.find(i => i.id === id);
+        if (!item) return;
+
+        const modal = document.createElement('div');
+        modal.className = 'secrets-modal-overlay';
+        modal.innerHTML = `
+            <div class="secrets-modal">
+                <div class="secrets-modal-header desktop-style">
+                    <div class="modal-title-text">👤 ${this.escapeHtml(item.name)}</div>
+                    <button class="secrets-modal-close" onclick="secretsManager.closeModal()">×</button>
+                </div>
+                <div class="secrets-modal-body">
+                    <div class="detail-row">
+                        <label>Логин:</label>
+                        <div class="detail-value-wrapper">
+                            <span>${this.escapeHtml(item.login)}</span>
+                            <button class="mini-copy-btn" onclick="secretsManager.copyToClipboard('${this.escapeAttr(item.login)}', this)">📋</button>
+                        </div>
+                    </div>
+                    <div class="detail-row">
+                        <label>Пароль / Токен:</label>
+                        <div class="detail-value-wrapper">
+                            <span class="password-hidden">••••••••••••</span>
+                            <button class="mini-copy-btn" onclick="secretsManager.copyToClipboard('${this.escapeAttr(item.password)}', this)">📋 Копировать</button>
+                        </div>
+                    </div>
+                    ${item.url ? `
+                    <div class="detail-row">
+                        <label>URL:</label>
+                        <div class="detail-value-wrapper">
+                            <a href="${item.url}" target="_blank" class="detail-link">${this.escapeHtml(item.url)}</a>
+                        </div>
+                    </div>
+                    ` : ''}
+                </div>
+                <div class="secrets-modal-footer">
+                    <button class="btn btn-secondary" onclick="secretsManager.closeModal()">Закрыть</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
     // Просмотр заметки
     viewNote(id) {
         const item = this.items.find(i => i.id === id);
@@ -303,8 +426,8 @@ class SecretsManager {
         modal.className = 'secrets-modal-overlay';
         modal.innerHTML = `
             <div class="secrets-modal">
-                <div class="secrets-modal-header">
-                    <h3>${this.escapeHtml(item.title)}</h3>
+                <div class="secrets-modal-header desktop-style">
+                    <div class="modal-title-text">📝 ${this.escapeHtml(item.title)}</div>
                     <button class="secrets-modal-close" onclick="secretsManager.closeModal()">×</button>
                 </div>
                 <div class="secrets-modal-body">
@@ -312,7 +435,7 @@ class SecretsManager {
                 </div>
                 <div class="secrets-modal-footer">
                     <button class="btn btn-secondary" onclick="secretsManager.closeModal()">Закрыть</button>
-                    <button class="btn btn-primary" onclick="secretsManager.copyToClipboard(\`${this.escapeAttr(item.content)}\`, this)">Копировать</button>
+                    <button class="btn btn-primary" onclick="secretsManager.copyToClipboard(\`${this.escapeAttr(item.content)}\`, this)">Копировать текст</button>
                 </div>
             </div>
         `;

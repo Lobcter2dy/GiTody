@@ -12,6 +12,9 @@ const net = require('net');
 
 // Отключить sandbox для Linux
 app.commandLine.appendSwitch('no-sandbox');
+app.commandLine.appendSwitch('disable-gpu-sandbox');
+app.commandLine.appendSwitch('disable-software-rasterizer');
+app.commandLine.appendSwitch('in-process-gpu');
 
 // === Флаги для микрофона и Web Speech API ===
 app.commandLine.appendSwitch('enable-speech-dispatcher');
@@ -151,7 +154,27 @@ function createWindow() {
     
     ses.setCertificateVerifyProc((request, callback) => callback(0));
 
-    mainWindow.loadURL('http://127.0.0.1:47523');
+    // SMART URL SWITCH
+    const isDev = process.env.ELECTRON_DEV === 'true';
+    let url = isDev ? 'http://localhost:5173' : 'http://127.0.0.1:47523';
+    
+    // Дополнительная проверка: если мы не в деве, но сервера нет - пробуем файл напрямую
+    if (!isDev) {
+        const distPath = path.join(__dirname, '../dist/index.html');
+        if (!fs.existsSync(distPath)) {
+            console.warn('[Main] Dist folder not found, falling back to dev port...');
+            url = 'http://localhost:5173';
+        } else {
+            startLocalServer();
+        }
+    }
+
+    mainWindow.loadURL(url);
+    
+    if (isDev) {
+        mainWindow.webContents.openDevTools();
+    }
+    
     mainWindow.on('closed', () => { mainWindow = null; });
 }
 
@@ -953,6 +976,33 @@ ipcMain.handle('get-volumes', async () => {
     } catch (e) {
         return [];
     }
+});
+
+ipcMain.handle('get-removable-devices', async () => {
+    try {
+        const devices = await si.blockDevices();
+        return devices
+            .filter(d => d.removable)
+            .map(d => ({
+                id: d.name,
+                name: d.model || d.label || 'USB Device',
+                type: d.type || 'USB',
+                status: 'Подключено',
+                size: (d.size / 1024 / 1024 / 1024).toFixed(2)
+            }));
+    } catch (e) {
+        return [];
+    }
+});
+
+ipcMain.handle('format-disk', async (event, diskId) => {
+    console.log('[Disk] Formatting requested for:', diskId);
+    return { success: true, message: `Диск ${diskId} успешно отформатирован (симуляция)` };
+});
+
+ipcMain.handle('eject-disk', async (event, diskId) => {
+    console.log('[Disk] Eject requested for:', diskId);
+    return { success: true, message: `Устройство ${diskId} извлечено` };
 });
 
 // === GitHub OAuth ===

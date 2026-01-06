@@ -64,7 +64,7 @@ body {
     overflow: hidden;
     flex-shrink: 0;
     position: relative;
-    box-shadow: inset -1px 0 0 rgba(255,255,255,0.02);
+    box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.02);
 }
 
 .sidebar::after {
@@ -74,7 +74,7 @@ body {
     right: 0;
     width: 1px;
     height: 100%;
-    background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 50%, rgba(0,0,0,0.1) 100%);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, transparent 50%, rgba(0, 0, 0, 0.1) 100%);
     pointer-events: none;
 }
 
@@ -86,7 +86,7 @@ body {
     gap: 12px;
     height: 65px;
     flex-shrink: 0;
-    background: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, transparent 100%);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, transparent 100%);
 }
 
 .github-logo {
@@ -228,7 +228,7 @@ body {
     z-index: 100;
     background: var(--bg-secondary);
     background-image: var(--gradient-panel);
-    box-shadow: 0 1px 0 rgba(255,255,255,0.02), var(--shadow-sm);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02), var(--shadow-sm);
 }
 
 .header-title {

@@ -1,15 +1,15 @@
 {
-  "name": "github-manager",
+  "name": "gitody",
   "version": "1.0.0",
-  "description": "GitHub Repository Manager - Web and Electron Application",
+  "description": "GiTody - GitHub Repository Manager",
   "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "electron": "npm run build && electron . --no-sandbox",
-    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron . --no-sandbox\"",
+    "electron": "npm run build && cross-env ELECTRON_DEV=false electron . --no-sandbox",
+    "electron:dev": "concurrently \"npm run dev\" \"cross-env ELECTRON_DEV=true wait-on http://localhost:5173 && electron . --no-sandbox\"",
     "electron:build": "npm run build && electron-builder",
     "electron:pack": "npm run build && electron-builder --dir",
     "electron:standalone": "npm run build && electron . --no-sandbox"
@@ -24,7 +24,8 @@
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^9.2.1",
-    "electron": "^39.2.7",
+    "cross-env": "10.1.0",
+    "electron": "22.3.27",
     "electron-builder": "^26.0.12",
     "vite": "^7.3.0",
     "wait-on": "^9.0.3"
@@ -36,8 +37,8 @@
     "systeminformation": "5.29.1"
   },
   "build": {
-    "appId": "com.githubmanager.app",
-    "productName": "GitHub Manager",
+    "appId": "com.gitody.app",
+    "productName": "GiTody",
     "directories": {
       "output": "dist-electron"
     },

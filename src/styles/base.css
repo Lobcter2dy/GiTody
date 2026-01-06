@@ -14,7 +14,8 @@ html {
     text-rendering: optimizeLegibility;
 }
 
-html, body {
+html,
+body {
     background: var(--bg-primary);
     color: var(--text-primary);
     line-height: 1.5;
@@ -71,18 +72,25 @@ textarea:focus-visible {
 }
 
 /* Premium Transitions */
-button, input, select, textarea, a {
+button,
+input,
+select,
+textarea,
+a {
     transition: all var(--duration) var(--ease);
 }
 
 /* Image Rendering */
-img, svg {
+img,
+svg {
     image-rendering: -webkit-optimize-contrast;
     image-rendering: crisp-edges;
 }
 
 /* Disable user select on UI elements */
-button, label, .no-select {
+button,
+label,
+.no-select {
     user-select: none;
     -webkit-user-select: none;
 }

@@ -40,13 +40,8 @@ export class GitHubPanelManager {
     switchSection(sectionName) {
         this.activeSection = sectionName;
 
-        // Обновить активную кнопку навигации (новые иконки)
+        // Обновить активную кнопку навигации
         document.querySelectorAll('.github-icon-btn').forEach(item => {
-            item.classList.toggle('active', item.dataset.section === sectionName);
-        });
-
-        // Legacy support
-        document.querySelectorAll('.github-nav-item').forEach(item => {
             item.classList.toggle('active', item.dataset.section === sectionName);
         });
 
@@ -55,9 +50,9 @@ export class GitHubPanelManager {
             section.classList.toggle('active', section.id === `section-${sectionName}`);
         });
 
-        // Сохранить состояние
-        if (window.stateManager) {
-            window.stateManager.set('activeGithubSection', sectionName);
+        // Если это Overview, обновить данные
+        if (sectionName === 'overview' && window.githubManager) {
+            window.githubManager.syncAll();
         }
     }
 

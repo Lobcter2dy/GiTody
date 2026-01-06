@@ -36,7 +36,7 @@
     background-image: var(--gradient-surface);
     border-bottom: 1px solid var(--border);
     gap: 8px;
-    box-shadow: 0 1px 0 rgba(255,255,255,0.02);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02);
 }
 
 .editor-toolbar-left,
@@ -208,13 +208,34 @@
 }
 
 /* Syntax Colors */
-.keyword { color: #ff7b72; }
-.string { color: #a5d6ff; }
-.number { color: #79c0ff; }
-.comment { color: #8b949e; font-style: italic; }
-.function { color: #d2a8ff; }
-.bracket { color: #8b949e; }
-.operator { color: #e6edf3; }
+.keyword {
+    color: #ff7b72;
+}
+
+.string {
+    color: #a5d6ff;
+}
+
+.number {
+    color: #79c0ff;
+}
+
+.comment {
+    color: #8b949e;
+    font-style: italic;
+}
+
+.function {
+    color: #d2a8ff;
+}
+
+.bracket {
+    color: #8b949e;
+}
+
+.operator {
+    color: #e6edf3;
+}
 
 /* Console Panel */
 .console-panel {
@@ -276,10 +297,21 @@
     word-wrap: break-word;
 }
 
-.console-log.info { color: #e6edf3; }
-.console-log.error { color: #f85149; }
-.console-log.warn { color: #d29922; }
-.console-log.success { color: #3fb950; }
+.console-log.info {
+    color: #e6edf3;
+}
+
+.console-log.error {
+    color: #f85149;
+}
+
+.console-log.warn {
+    color: #d29922;
+}
+
+.console-log.success {
+    color: #3fb950;
+}
 
 /* Status Bar */
 .editor-status-bar {
@@ -386,4 +418,3 @@
     line-height: 1.6;
     color: var(--text-primary);
 }
-
