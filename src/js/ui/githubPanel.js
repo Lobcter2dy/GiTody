@@ -63,58 +63,223 @@ export class GitHubPanelManager {
 
     // API методы для работы с данными
     async loadBranches() {
-        // TODO: Загрузка веток из GitHub API
         console.log('[GitHubPanel] Loading branches...');
+        if (window.githubManager?.currentRepo) {
+            const branches = await window.githubManager.fetchBranches(window.githubManager.currentRepo.full_name);
+            window.githubManager.renderBranches(branches);
+        }
     }
 
     async loadPullRequests() {
-        // TODO: Загрузка PR из GitHub API
         console.log('[GitHubPanel] Loading pull requests...');
+        if (window.githubManager?.currentRepo) {
+            const pullRequests = await window.githubManager.fetchPullRequests(window.githubManager.currentRepo.full_name);
+            window.githubManager.renderPullRequests(pullRequests);
+        }
     }
 
     async loadIssues() {
-        // TODO: Загрузка issues из GitHub API
         console.log('[GitHubPanel] Loading issues...');
+        if (window.githubManager?.currentRepo) {
+            const issues = await window.githubManager.fetchIssues(window.githubManager.currentRepo.full_name);
+            window.githubManager.renderIssues(issues);
+        }
     }
 
     async loadCommits() {
-        // TODO: Загрузка коммитов из GitHub API
         console.log('[GitHubPanel] Loading commits...');
+        if (window.githubManager?.currentRepo) {
+            const commits = await window.githubManager.fetchCommits(window.githubManager.currentRepo.full_name);
+            window.githubManager.renderCommits(commits);
+        }
     }
 
     async loadActions() {
-        // TODO: Загрузка actions из GitHub API
         console.log('[GitHubPanel] Loading actions...');
+        if (window.githubManager?.currentRepo) {
+            const workflows = await window.githubManager.fetchWorkflowRuns(window.githubManager.currentRepo.full_name);
+            window.githubManager.renderWorkflows(workflows);
+        }
     }
 
     async loadReleases() {
-        // TODO: Загрузка релизов из GitHub API
         console.log('[GitHubPanel] Loading releases...');
+        if (window.githubManager?.currentRepo) {
+            const repoName = window.githubManager.currentRepo.full_name;
+            try {
+                const response = await fetch(`${window.githubManager.baseUrl}/repos/${repoName}/releases?per_page=20`, {
+                    headers: window.githubManager.getHeaders()
+                });
+                if (response.ok) {
+                    const releases = await response.json();
+                    this.renderReleases(releases);
+                }
+            } catch (error) {
+                console.error('[GitHubPanel] Error loading releases:', error);
+            }
+        }
+    }
+
+    renderReleases(releases) {
+        const container = document.getElementById('releasesList');
+        if (!container) return;
+
+        if (!releases || releases.length === 0) {
+            container.innerHTML = '<div class="empty-state">Нет релизов</div>';
+            return;
+        }
+
+        container.innerHTML = releases.map(release => `
+            <div class="release-item">
+                <div class="release-header">
+                    <div class="release-tag">${release.tag_name}</div>
+                    ${release.prerelease ? '<span class="badge badge-warning">Pre-release</span>' : ''}
+                    ${release.draft ? '<span class="badge badge-secondary">Draft</span>' : ''}
+                </div>
+                <div class="release-title">${release.name || release.tag_name}</div>
+                <div class="release-meta">
+                    ${release.author?.login || 'Unknown'} • ${window.githubManager.formatDate(release.published_at)}
+                </div>
+                <div class="release-actions">
+                    <a href="${release.html_url}" target="_blank" class="btn btn-sm">View on GitHub</a>
+                </div>
+            </div>
+        `).join('');
     }
 
     // Создание новых элементов
-    createBranch() {
+    async createBranch() {
         const name = prompt('Введите имя новой ветки:');
-        if (name) {
+        if (name && window.githubManager?.currentRepo) {
             console.log('[GitHubPanel] Creating branch:', name);
-            // TODO: API call
-            alert(`Ветка "${name}" создана`);
+            const success = await window.githubManager.createBranch(
+                window.githubManager.currentRepo.full_name,
+                name
+            );
+            if (success) {
+                alert(`Ветка "${name}" создана`);
+                await this.loadBranches();
+            } else {
+                alert(`Ошибка при создании ветки "${name}"`);
+            }
         }
     }
 
     createPullRequest() {
         console.log('[GitHubPanel] Creating new PR...');
-        // TODO: Открыть модальное окно для создания PR
+        if (window.openModal) {
+            window.openModal('create-pr');
+        } else {
+            this.showCreatePRDialog();
+        }
     }
 
     createIssue() {
         console.log('[GitHubPanel] Creating new issue...');
-        // TODO: Открыть модальное окно для создания issue
+        if (window.openModal) {
+            window.openModal('create-issue');
+        } else {
+            this.showCreateIssueDialog();
+        }
     }
 
     createRelease() {
         console.log('[GitHubPanel] Creating new release...');
-        // TODO: Открыть модальное окно для создания релиза
+        if (window.openModal) {
+            window.openModal('create-release');
+        } else {
+            this.showCreateReleaseDialog();
+        }
+    }
+
+    // Диалоги создания (fallback если нет модальной системы)
+    showCreatePRDialog() {
+        const title = prompt('Название Pull Request:');
+        if (!title) return;
+        
+        const head = prompt('Исходная ветка (head):');
+        if (!head) return;
+        
+        const base = prompt('Целевая ветка (base):', window.githubManager?.currentRepo?.default_branch || 'main');
+        if (!base) return;
+        
+        const body = prompt('Описание (опционально):') || '';
+        
+        this.submitCreatePR(title, head, base, body);
+    }
+
+    async submitCreatePR(title, head, base, body) {
+        if (!window.githubManager?.currentRepo) return;
+        
+        const pr = await window.githubManager.createPullRequest(title, head, base, body);
+        if (pr) {
+            alert(`Pull Request #${pr.number} создан!`);
+            await this.loadPullRequests();
+        } else {
+            alert('Ошибка при создании Pull Request');
+        }
+    }
+
+    showCreateIssueDialog() {
+        const title = prompt('Название Issue:');
+        if (!title) return;
+        
+        const body = prompt('Описание (опционально):') || '';
+        
+        this.submitCreateIssue(title, body);
+    }
+
+    async submitCreateIssue(title, body, labels = []) {
+        if (!window.githubManager?.currentRepo) return;
+        
+        const issue = await window.githubManager.createIssue(title, body, labels);
+        if (issue) {
+            alert(`Issue #${issue.number} создан!`);
+            await this.loadIssues();
+        } else {
+            alert('Ошибка при создании Issue');
+        }
+    }
+
+    showCreateReleaseDialog() {
+        const tag = prompt('Тег релиза (например, v1.0.0):');
+        if (!tag) return;
+        
+        const name = prompt('Название релиза:', tag);
+        if (!name) return;
+        
+        const body = prompt('Описание релиза (опционально):') || '';
+        
+        this.submitCreateRelease(tag, name, body);
+    }
+
+    async submitCreateRelease(tag, name, body) {
+        if (!window.githubManager?.currentRepo) return;
+        
+        try {
+            const response = await fetch(`${window.githubManager.baseUrl}/repos/${window.githubManager.currentRepo.full_name}/releases`, {
+                method: 'POST',
+                headers: window.githubManager.getHeaders(),
+                body: JSON.stringify({
+                    tag_name: tag,
+                    name: name,
+                    body: body,
+                    draft: false,
+                    prerelease: false
+                })
+            });
+            
+            if (response.ok) {
+                const release = await response.json();
+                alert(`Релиз ${release.tag_name} создан!`);
+                await this.loadReleases();
+            } else {
+                alert('Ошибка при создании релиза');
+            }
+        } catch (error) {
+            console.error('[GitHubPanel] Error creating release:', error);
+            alert('Ошибка при создании релиза');
+        }
     }
 }
 
