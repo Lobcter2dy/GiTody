@@ -34,10 +34,12 @@ class SecretsManager {
             document.addEventListener('DOMContentLoaded', () => {
                 this.render();
                 this.setupContextMenu();
+                this.setupItemEventListeners();
             });
         } else {
             this.render();
             this.setupContextMenu();
+            this.setupItemEventListeners();
         }
     }
 
@@ -218,9 +220,6 @@ class SecretsManager {
                 return this.renderPassword(item);
             }
         }).join('');
-
-        // Setup event listeners for action buttons
-        this.setupItemEventListeners();
     }
 
     renderPassword(item) {
