@@ -574,15 +574,15 @@ class SecretsManager {
 
         const copyLoginBtn = modal.querySelector('.js-copy-login');
         if (copyLoginBtn) {
-            copyLoginBtn.addEventListener('click', function() {
-                secretsManager.copyToClipboard(item.login, this);
+            copyLoginBtn.addEventListener('click', (e) => {
+                this.copyToClipboard(item.login, e.currentTarget);
             });
         }
 
         const copyPasswordBtn = modal.querySelector('.js-copy-password');
         if (copyPasswordBtn) {
-            copyPasswordBtn.addEventListener('click', function() {
-                secretsManager.copyToClipboard(item.password, this);
+            copyPasswordBtn.addEventListener('click', (e) => {
+                this.copyToClipboard(item.password, e.currentTarget);
             });
         }
     }
@@ -625,8 +625,8 @@ class SecretsManager {
 
         const copyBtn = modal.querySelector('.js-copy-content');
         if (copyBtn) {
-            copyBtn.addEventListener('click', function() {
-                secretsManager.copyToClipboard(item.content, this);
+            copyBtn.addEventListener('click', (e) => {
+                this.copyToClipboard(item.content, e.currentTarget);
             });
         }
     }
