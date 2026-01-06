@@ -456,7 +456,7 @@ export class GitHubManager {
                 return;
             }
 
-            const normalizedBase64 = content.replace(/[\r\n]+/g, '');
+            const normalizedBase64 = content.replace(/\s+/g, '');
             let decoded;
             try {
                 decoded = atob(normalizedBase64);
