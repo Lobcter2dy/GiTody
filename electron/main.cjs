@@ -10,11 +10,9 @@ const os = require('os');
 const dns = require('dns');
 const net = require('net');
 
-// Отключить sandbox для Linux
+// Отключить sandbox для Linux (необходимо для работы в некоторых средах)
 app.commandLine.appendSwitch('no-sandbox');
-app.commandLine.appendSwitch('disable-gpu-sandbox');
 app.commandLine.appendSwitch('disable-software-rasterizer');
-app.commandLine.appendSwitch('in-process-gpu');
 
 // === Флаги для микрофона и Web Speech API ===
 app.commandLine.appendSwitch('enable-speech-dispatcher');
