@@ -531,6 +531,14 @@ export class GitHubManager {
         } catch { return []; }
     }
 
+    // Получить релизы (с кешем)
+    async fetchReleases(repoName) {
+        try {
+            const response = await this._cachedFetch(`${this.baseUrl}/repos/${repoName}/releases?per_page=20`);
+            return response.ok ? await response.json() : [];
+        } catch { return []; }
+    }
+
     // Получить содержимое файла
     async getFileContent(repoName, path, branch = 'main') {
         try {
@@ -928,6 +936,40 @@ export class GitHubManager {
             });
             return response.ok ? await response.json() : [];
         } catch { return []; }
+    }
+
+    // === RELEASES ===
+
+    // Создать Release
+    async createRelease(tagName, name, body = '', draft = false, prerelease = false) {
+        if (!this.currentRepo) return null;
+
+        try {
+            const response = await fetch(`${this.baseUrl}/repos/${this.currentRepo.full_name}/releases`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify({
+                    tag_name: tagName,
+                    name: name,
+                    body: body,
+                    draft: draft,
+                    prerelease: prerelease
+                })
+            });
+
+            if (response.ok) {
+                const release = await response.json();
+                await this.loadRepoData();
+                return release;
+            } else {
+                const error = await response.json();
+                console.error('[GitHub] Error creating release:', error.message);
+                return null;
+            }
+        } catch (error) {
+            console.error('[GitHub] Error creating release:', error);
+            return null;
+        }
     }
 
     // === GITHUB ACTIONS ===
