@@ -10,7 +10,12 @@ const os = require('os');
 const dns = require('dns');
 const net = require('net');
 
-// Отключить sandbox для Linux
+// Security Note: GPU sandbox flags for Linux compatibility
+// These flags are required for running on certain Linux systems where GPU sandboxing causes startup failures.
+// WARNING: Disabling GPU sandbox ('disable-gpu-sandbox', 'in-process-gpu') removes Chromium security boundaries.
+// These should only be used when running on Linux systems that require them for compatibility.
+// Consider using conditional logic based on platform if possible.
+// See: https://github.com/electron/electron/issues/9662
 app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('disable-gpu-sandbox');
 app.commandLine.appendSwitch('disable-software-rasterizer');
