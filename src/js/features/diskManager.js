@@ -49,7 +49,7 @@ class DiskManager {
             // Если контейнер не найден, проверим активна ли вообще вкладка системного монитора
             const systemSection = document.getElementById('settings-system');
             if (systemSection && systemSection.classList.contains('active')) {
-                console.warn('[DiskManager] Disk monitor container not found in active system section');
+                console.warn('[DiskManager] Disk monitor container not found in the active system section');
             }
             return;
         }
