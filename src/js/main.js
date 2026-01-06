@@ -70,10 +70,7 @@ async function initApp() {
     if (!githubAuth.isConnected) {
       console.log('[App] Attempting auto-login from Secrets...');
       const githubSecret = secretsManager.items.find(
-        s =>
-          s.type === 'password' &&
-          typeof s.name === 'string' &&
-          s.name.toLowerCase().includes('github')
+        s => s.type === 'password' && s.name.toLowerCase().includes('github')
       );
 
       if (githubSecret && githubSecret.password) {

@@ -363,11 +363,6 @@ class SecretsManager {
     return div.innerHTML;
   }
 
-  escapeAttr(str) {
-    if (!str) return '';
-    return str.replace(/`/g, '\\`').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n');
-  }
-
   // Модал выбора типа
   showAddModal() {
     const modal = document.createElement('div');
