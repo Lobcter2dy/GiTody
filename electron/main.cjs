@@ -10,11 +10,11 @@ const os = require('os');
 const dns = require('dns');
 const net = require('net');
 
-// Отключить sandbox для Linux
+// Security note: Only essential sandbox flags are used
+// 'no-sandbox' is kept for Linux compatibility where sandboxing may cause issues
+// GPU sandbox flags have been removed to maintain security boundaries
 app.commandLine.appendSwitch('no-sandbox');
-app.commandLine.appendSwitch('disable-gpu-sandbox');
 app.commandLine.appendSwitch('disable-software-rasterizer');
-app.commandLine.appendSwitch('in-process-gpu');
 
 // === Флаги для микрофона и Web Speech API ===
 app.commandLine.appendSwitch('enable-speech-dispatcher');
