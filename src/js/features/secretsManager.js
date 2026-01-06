@@ -556,6 +556,13 @@ class SecretsManager {
             const action = btn.dataset.modalAction;
             const itemId = modal.dataset.itemId;
 
+            // Lookup item once for copy operations
+            let item = null;
+            if (itemId && ['copy-login', 'copy-password', 'copy-content'].includes(action)) {
+                item = this.items.find(i => i.id === itemId);
+                if (!item) return;
+            }
+
             switch (action) {
                 case 'close':
                     this.closeModal();
@@ -572,21 +579,15 @@ class SecretsManager {
                 case 'save-note':
                     this.saveNote();
                     break;
-                case 'copy-login': {
-                    const item = this.items.find(i => i.id === itemId);
-                    if (item) this.copyToClipboard(item.login, btn);
+                case 'copy-login':
+                    this.copyToClipboard(item.login, btn);
                     break;
-                }
-                case 'copy-password': {
-                    const item = this.items.find(i => i.id === itemId);
-                    if (item) this.copyToClipboard(item.password, btn);
+                case 'copy-password':
+                    this.copyToClipboard(item.password, btn);
                     break;
-                }
-                case 'copy-content': {
-                    const item = this.items.find(i => i.id === itemId);
-                    if (item) this.copyToClipboard(item.content, btn);
+                case 'copy-content':
+                    this.copyToClipboard(item.content, btn);
                     break;
-                }
             }
         });
     }
