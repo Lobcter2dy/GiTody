@@ -13,15 +13,24 @@ export class GitHubOAuth {
             // Open in external browser
             window.electronAPI?.openExternal(authUrl);
 
+            let timeoutId;
+            let resolved = false;
+
             // Listen for result from main process
             const resultHandler = async (event, data) => {
+                if (resolved) return;
+                
                 if (data.type === 'success') {
+                    resolved = true;
+                    clearTimeout(timeoutId);
                     window.electronAPI?.removeListener('github-oauth-result', resultHandler);
                     try {
                         const token = await this.exchangeCodeForToken(data.code);
                         resolve(token);
                     } catch (e) { reject(e); }
                 } else if (data.type === 'error') {
+                    resolved = true;
+                    clearTimeout(timeoutId);
                     window.electronAPI?.removeListener('github-oauth-result', resultHandler);
                     reject(new Error(data.error));
                 }
@@ -30,9 +39,12 @@ export class GitHubOAuth {
             window.electronAPI?.on('github-oauth-result', resultHandler);
             
             // Timeout after 5 minutes
-            setTimeout(() => {
-                window.electronAPI?.removeListener('github-oauth-result', resultHandler);
-                reject(new Error('Auth timeout'));
+            timeoutId = setTimeout(() => {
+                if (!resolved) {
+                    resolved = true;
+                    window.electronAPI?.removeListener('github-oauth-result', resultHandler);
+                    reject(new Error('Auth timeout'));
+                }
             }, 300000);
         });
     }
