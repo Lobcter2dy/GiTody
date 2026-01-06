@@ -10,11 +10,11 @@ const os = require('os');
 const dns = require('dns');
 const net = require('net');
 
-// Отключить sandbox для Linux
+// Note: 'no-sandbox' is required for some Linux environments where the sandbox cannot be initialized.
+// This is a known limitation when running Electron in certain containerized or restricted environments.
+// See: https://github.com/electron/electron/issues/17972
 app.commandLine.appendSwitch('no-sandbox');
-app.commandLine.appendSwitch('disable-gpu-sandbox');
 app.commandLine.appendSwitch('disable-software-rasterizer');
-app.commandLine.appendSwitch('in-process-gpu');
 
 // === Флаги для микрофона и Web Speech API ===
 app.commandLine.appendSwitch('enable-speech-dispatcher');
