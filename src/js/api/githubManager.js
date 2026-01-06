@@ -5,15 +5,6 @@
 
 import { session } from '../storage/session.js';
 
-/**
- * GitHubManager — логика управления связанным аккаунтом GitHub и действиями с репозиториями:
- * - Получение данных о пользователе, список репозиториев, ветки, PR, Issues, Actions
- * - Работа с файловым деревом и содержимым файлов
- * - UI-апдейты (sidebar, вкладки Information/GitHub)
- * - Операции CRUD для репозитория, ветки, файлов, Issues, PR и т.д.
- *
- * Используй строго JS-стилистику, никаких UI-бантиков и хуков не ломай!
- */
 export class GitHubManager {
     constructor() {
         this.repos = [];
