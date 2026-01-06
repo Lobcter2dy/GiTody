@@ -44,9 +44,19 @@ export class GitHubManager {
      * Format date string for display
      */
     formatDate(dateString) {
+        if (!dateString) return 'unknown';
+        
         const date = new Date(dateString);
+        
+        // Check if date is valid
+        if (isNaN(date.getTime())) return 'invalid date';
+        
         const now = new Date();
         const diffMs = now - date;
+        
+        // Handle future dates
+        if (diffMs < 0) return 'in the future';
+        
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
         
         if (diffDays === 0) return 'today';
@@ -65,6 +75,14 @@ export class GitHubManager {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    /**
+     * Escape string for use in JavaScript context (onclick attributes, etc.)
+     */
+    escapeJs(text) {
+        if (typeof text !== 'string') return "''";
+        return JSON.stringify(text);
     }
 
     // === API FETCHERS ===
@@ -347,7 +365,7 @@ export class GitHubManager {
         if (!el) return;
         el.innerHTML = this.repos.map(r => `
             <div class="sidebar-item ${this.currentRepo?.full_name === r.full_name ? 'active' : ''}" 
-                 onclick="githubManager.selectRepo('${this.escapeHtml(r.full_name)}')">
+                 onclick="githubManager.selectRepo(${this.escapeJs(r.full_name)})">
                 ${r.private ? '🔒' : '📁'} ${this.escapeHtml(r.name)}
             </div>
         `).join('');
@@ -369,15 +387,19 @@ export class GitHubManager {
     renderPRs(list) {
         const el = document.getElementById('prList');
         if (!el) return;
-        el.innerHTML = list.map(p => `
+        el.innerHTML = list.map(p => {
+            const prNumber = parseInt(p.number, 10);
+            if (isNaN(prNumber)) return ''; // Skip invalid PR numbers
+            return `
             <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
                 <div>
-                    <b>#${p.number}</b> ${this.escapeHtml(p.title)} (${this.escapeHtml(p.state)})
+                    <b>#${prNumber}</b> ${this.escapeHtml(p.title)} (${this.escapeHtml(p.state)})
                     <div style="font-size:11px; color:#8b949e">${this.escapeHtml(p.user.login)} • ${this.formatDate(p.created_at)}</div>
                 </div>
-                ${p.state === 'open' ? `<button class="btn btn-sm btn-primary" onclick="githubManager.mergePullRequest(${p.number})">Слить (Merge)</button>` : ''}
+                ${p.state === 'open' ? `<button class="btn btn-sm btn-primary" onclick="githubManager.mergePullRequest(${prNumber})">Слить (Merge)</button>` : ''}
             </div>
-        `).join('');
+        `;
+        }).join('');
     }
 
     renderIssues(list) {
@@ -400,7 +422,7 @@ export class GitHubManager {
         if (el) el.innerHTML = list.map(w => `
             <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
                 <span>${this.escapeHtml(w.name)}</span>
-                <button class="btn btn-sm" onclick="githubManager.runWorkflow('${w.id}')">Run</button>
+                <button class="btn btn-sm" onclick="githubManager.runWorkflow(${this.escapeJs(w.id)})">Run</button>
             </div>
         `).join('');
     }
@@ -409,7 +431,7 @@ export class GitHubManager {
         const el = document.getElementById('repoFileTree');
         if (!el) return;
         el.innerHTML = list.map(item => `
-            <div class="tree-item" onclick="githubManager.${item.type === 'dir' ? 'toggleFolder' : 'previewFileContent'}('${this.escapeHtml(item.path)}')">
+            <div class="tree-item" onclick="githubManager.${item.type === 'dir' ? 'toggleFolder' : 'previewFileContent'}(${this.escapeJs(item.path)})">
                 ${item.type === 'dir' ? '📁' : '📄'} ${this.escapeHtml(item.name)}
             </div>
         `).join('');
