@@ -10,11 +10,13 @@ const os = require('os');
 const dns = require('dns');
 const net = require('net');
 
-// Отключить sandbox для Linux
+// Linux compatibility flags
+// NOTE: --no-sandbox is required for running in certain Linux environments (e.g., CI, containers)
+// where user namespaces are not available. This is a known Electron limitation.
+// See: https://github.com/electron/electron/issues/17972
 app.commandLine.appendSwitch('no-sandbox');
-app.commandLine.appendSwitch('disable-gpu-sandbox');
+// Disable software rasterizer to use hardware acceleration when available
 app.commandLine.appendSwitch('disable-software-rasterizer');
-app.commandLine.appendSwitch('in-process-gpu');
 
 // === Флаги для микрофона и Web Speech API ===
 app.commandLine.appendSwitch('enable-speech-dispatcher');
