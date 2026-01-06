@@ -143,16 +143,16 @@ class SecretsManager {
 
         const copyMainBtn = menu.querySelector('.js-copy-main');
         if (copyMainBtn) {
-            copyMainBtn.addEventListener('click', () => {
-                this.copyToClipboard(isPassword ? item.password : item.content);
+            copyMainBtn.addEventListener('click', (e) => {
+                this.copyToClipboard(isPassword ? item.password : item.content, e.currentTarget);
             });
         }
 
         if (isPassword) {
             const copyLoginBtn = menu.querySelector('.js-copy-login');
             if (copyLoginBtn) {
-                copyLoginBtn.addEventListener('click', () => {
-                    this.copyToClipboard(item.login);
+                copyLoginBtn.addEventListener('click', (e) => {
+                    this.copyToClipboard(item.login, e.currentTarget);
                 });
             }
         }
