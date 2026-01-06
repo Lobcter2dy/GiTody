@@ -8,7 +8,7 @@ const REDIRECT_URI = 'http://localhost:47524/callback';
 export class GitHubOAuth {
     async authorize() {
         return new Promise((resolve, reject) => {
-            const authUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=repo%20read:user%20user:email%20delete_repo%20workflow&state=${Date.now()}`;
+            const authUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=repo%20read:user%20user:email%20delete_repo&state=${Date.now()}`;
 
             // Open in external browser
             window.electronAPI?.openExternal(authUrl);
