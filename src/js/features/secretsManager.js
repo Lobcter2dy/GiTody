@@ -34,11 +34,65 @@ class SecretsManager {
             document.addEventListener('DOMContentLoaded', () => {
                 this.render();
                 this.setupContextMenu();
+                this.setupEventDelegation();
             });
         } else {
             this.render();
             this.setupContextMenu();
+            this.setupEventDelegation();
         }
+    }
+
+    setupEventDelegation() {
+        const container = document.getElementById('secretsList');
+        if (!container) return;
+
+        // Use event delegation for all button clicks and double-clicks
+        container.addEventListener('click', (e) => {
+            const btn = e.target.closest('.secret-btn');
+            if (btn) {
+                e.stopPropagation();
+                const action = btn.dataset.action;
+                const itemEl = btn.closest('.secret-item');
+                const id = itemEl?.dataset.id;
+                const item = this.items.find(i => i.id === id);
+                
+                if (!item) return;
+
+                switch(action) {
+                    case 'copy-login':
+                        this.copyToClipboard(item.login, btn);
+                        break;
+                    case 'copy-password':
+                        this.copyToClipboard(item.password, btn);
+                        break;
+                    case 'copy-note':
+                        this.copyToClipboard(item.content, btn);
+                        break;
+                    case 'view-note':
+                        this.viewNote(id);
+                        break;
+                    case 'delete':
+                        this.confirmDelete(id);
+                        break;
+                }
+            }
+        });
+
+        // Handle double-click for viewing items
+        container.addEventListener('dblclick', (e) => {
+            const itemEl = e.target.closest('.secret-item');
+            if (itemEl) {
+                const id = itemEl.dataset.id;
+                const type = itemEl.dataset.type;
+                
+                if (type === 'password') {
+                    this.viewPassword(id);
+                } else {
+                    this.viewNote(id);
+                }
+            }
+        });
     }
 
     setupContextMenu() {
@@ -219,9 +273,6 @@ class SecretsManager {
                 return this.renderPassword(item);
             }
         }).join('');
-
-        // Attach event listeners after rendering
-        this.attachItemEventListeners();
     }
 
     renderPassword(item) {
@@ -299,56 +350,6 @@ class SecretsManager {
         `;
     }
 
-    attachItemEventListeners() {
-        const container = document.getElementById('secretsList');
-        if (!container) return;
-
-        // Attach double-click listeners for viewing items
-        container.querySelectorAll('.secret-item').forEach(itemEl => {
-            const id = itemEl.dataset.id;
-            const type = itemEl.dataset.type;
-            
-            itemEl.addEventListener('dblclick', () => {
-                if (type === 'password') {
-                    this.viewPassword(id);
-                } else {
-                    this.viewNote(id);
-                }
-            });
-        });
-
-        // Attach button click listeners
-        container.querySelectorAll('.secret-btn').forEach(btn => {
-            const action = btn.dataset.action;
-            const itemEl = btn.closest('.secret-item');
-            const id = itemEl.dataset.id;
-            const item = this.items.find(i => i.id === id);
-            
-            if (!item) return;
-
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent triggering double-click
-                
-                switch(action) {
-                    case 'copy-login':
-                        this.copyToClipboard(item.login, btn);
-                        break;
-                    case 'copy-password':
-                        this.copyToClipboard(item.password, btn);
-                        break;
-                    case 'copy-note':
-                        this.copyToClipboard(item.content, btn);
-                        break;
-                    case 'view-note':
-                        this.viewNote(id);
-                        break;
-                    case 'delete':
-                        this.confirmDelete(id);
-                        break;
-                }
-            });
-        });
-    }
 
     escapeHtml(str) {
         if (!str) return '';
