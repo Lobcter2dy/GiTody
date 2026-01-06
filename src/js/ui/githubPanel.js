@@ -105,18 +105,8 @@ export class GitHubPanelManager {
     async loadReleases() {
         console.log('[GitHubPanel] Loading releases...');
         if (window.githubManager?.currentRepo) {
-            const repoName = window.githubManager.currentRepo.full_name;
-            try {
-                const response = await fetch(`${window.githubManager.baseUrl}/repos/${repoName}/releases?per_page=20`, {
-                    headers: window.githubManager.getHeaders()
-                });
-                if (response.ok) {
-                    const releases = await response.json();
-                    this.renderReleases(releases);
-                }
-            } catch (error) {
-                console.error('[GitHubPanel] Error loading releases:', error);
-            }
+            const releases = await window.githubManager.fetchReleases(window.githubManager.currentRepo.full_name);
+            this.renderReleases(releases);
         }
     }
 
@@ -266,28 +256,11 @@ export class GitHubPanelManager {
     async submitCreateRelease(tag, name, body) {
         if (!window.githubManager?.currentRepo) return;
         
-        try {
-            const response = await fetch(`${window.githubManager.baseUrl}/repos/${window.githubManager.currentRepo.full_name}/releases`, {
-                method: 'POST',
-                headers: window.githubManager.getHeaders(),
-                body: JSON.stringify({
-                    tag_name: tag,
-                    name: name,
-                    body: body,
-                    draft: false,
-                    prerelease: false
-                })
-            });
-            
-            if (response.ok) {
-                const release = await response.json();
-                alert(`Релиз ${release.tag_name} создан!`);
-                await this.loadReleases();
-            } else {
-                alert('Ошибка при создании релиза');
-            }
-        } catch (error) {
-            console.error('[GitHubPanel] Error creating release:', error);
+        const release = await window.githubManager.createRelease(tag, name, body);
+        if (release) {
+            alert(`Релиз ${release.tag_name} создан!`);
+            await this.loadReleases();
+        } else {
             alert('Ошибка при создании релиза');
         }
     }
