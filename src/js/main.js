@@ -69,9 +69,10 @@ async function initApp() {
         // 1.1 Попытка авто-логина из SecretsManager, если еще не подключен
         if (!githubAuth.isConnected) {
             console.log('[App] Attempting auto-login from Secrets...');
-            const githubSecret = secretsManager.items.find(s => 
-                s.type === 'password' && 
-                (s.name.toLowerCase().includes('github') || s.password.startsWith('ghp_'))
+            const githubSecret = secretsManager.items.find(s =>
+                s.type === 'password' &&
+                typeof s.name === 'string' &&
+                s.name.toLowerCase().includes('github')
             );
             
             if (githubSecret && githubSecret.password) {
