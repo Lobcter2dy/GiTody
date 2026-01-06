@@ -8,6 +8,7 @@ class SecretsManager {
     constructor() {
         this.items = this.load();
         this._rawItems = [...this.items]; // Бекап в памяти
+        this._listenersAttached = false; // Flag to track if event listeners are attached
         this.init();
         this.setupPersistenceCheck();
     }
@@ -305,6 +306,10 @@ class SecretsManager {
     }
 
     setupItemEventListeners() {
+        // Only attach listeners once
+        if (this._listenersAttached) return;
+        this._listenersAttached = true;
+
         const container = document.getElementById('secretsList');
         if (!container) return;
 
