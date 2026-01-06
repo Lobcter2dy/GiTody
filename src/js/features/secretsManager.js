@@ -8,6 +8,8 @@ class SecretsManager {
     constructor() {
         this.items = this.load();
         this._rawItems = [...this.items]; // Бекап в памяти
+        this._eventDelegationSetup = false;
+        this._contextMenuSetup = false;
         this.init();
         this.setupPersistenceCheck();
     }
@@ -44,6 +46,8 @@ class SecretsManager {
     }
 
     setupEventDelegation() {
+        if (this._eventDelegationSetup) return;
+        
         const container = document.getElementById('secretsList');
         if (!container) return;
 
@@ -93,9 +97,13 @@ class SecretsManager {
                 this.viewNote(itemId);
             }
         });
+
+        this._eventDelegationSetup = true;
     }
 
     setupContextMenu() {
+        if (this._contextMenuSetup) return;
+        
         document.addEventListener('contextmenu', (e) => {
             const item = e.target.closest('.secret-item');
             if (item) {
@@ -105,6 +113,8 @@ class SecretsManager {
         });
 
         document.addEventListener('click', () => this.hideContextMenu());
+
+        this._contextMenuSetup = true;
     }
 
     showContextMenu(e, id) {
