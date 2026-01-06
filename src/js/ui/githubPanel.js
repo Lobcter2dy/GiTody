@@ -149,15 +149,22 @@ export class GitHubPanelManager {
 
     // Создание новых элементов
     async createBranch() {
+        if (!window.githubManager?.currentRepo) return;
+        
+        const defaultBranch = window.githubManager.currentRepo.default_branch || 'main';
+        const fromBranch = prompt(`Создать ветку из (по умолчанию: ${defaultBranch}):`, defaultBranch);
+        if (!fromBranch) return;
+        
         const name = prompt('Введите имя новой ветки:');
-        if (name && window.githubManager?.currentRepo) {
+        if (name) {
             console.log('[GitHubPanel] Creating branch:', name);
             const success = await window.githubManager.createBranch(
                 window.githubManager.currentRepo.full_name,
-                name
+                name,
+                fromBranch
             );
             if (success) {
-                alert(`Ветка "${name}" создана`);
+                alert(`Ветка "${name}" создана из "${fromBranch}"`);
                 await this.loadBranches();
             } else {
                 alert(`Ошибка при создании ветки "${name}"`);
@@ -194,13 +201,16 @@ export class GitHubPanelManager {
 
     // Диалоги создания (fallback если нет модальной системы)
     showCreatePRDialog() {
+        if (!window.githubManager?.currentRepo) return;
+        
         const title = prompt('Название Pull Request:');
         if (!title) return;
         
         const head = prompt('Исходная ветка (head):');
         if (!head) return;
         
-        const base = prompt('Целевая ветка (base):', window.githubManager?.currentRepo?.default_branch || 'main');
+        const defaultBranch = window.githubManager.currentRepo.default_branch || 'main';
+        const base = prompt(`Целевая ветка (base, по умолчанию: ${defaultBranch}):`, defaultBranch);
         if (!base) return;
         
         const body = prompt('Описание (опционально):') || '';
