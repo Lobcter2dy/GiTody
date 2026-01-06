@@ -62,30 +62,68 @@ class SecretsManager {
         menu.className = 'custom-context-menu';
         menu.style.left = e.pageX + 'px';
         menu.style.top = e.pageY + 'px';
+        menu.dataset.itemId = id;
 
         const isPassword = item.type === 'password';
 
         menu.innerHTML = `
-            <div class="context-menu-item" onclick="secretsManager.copyToClipboard('${this.escapeAttr(isPassword ? item.password : item.content)}')">
+            <div class="context-menu-item js-copy-main">
                 <span>📋</span> Копировать ${isPassword ? 'пароль' : 'текст'}
             </div>
             ${isPassword ? `
-            <div class="context-menu-item" onclick="secretsManager.copyToClipboard('${this.escapeAttr(item.login)}')">
+            <div class="context-menu-item js-copy-login">
                 <span>👤</span> Копировать логин
             </div>
             ` : ''}
             <div class="context-menu-divider"></div>
-            <div class="context-menu-item" onclick="secretsManager.viewNote('${item.id}')">
+            <div class="context-menu-item js-view-note">
                 <span>👁️</span> Открыть / Просмотреть
             </div>
-            <div class="context-menu-item" onclick="secretsManager.showAddModal()">
+            <div class="context-menu-item js-add-new">
                 <span>➕</span> Добавить новое
             </div>
             <div class="context-menu-divider"></div>
-            <div class="context-menu-item danger" onclick="secretsManager.confirmDelete('${item.id}')">
+            <div class="context-menu-item danger js-delete">
                 <span>🗑️</span> Удалить
             </div>
         `;
+
+        const copyMainBtn = menu.querySelector('.js-copy-main');
+        if (copyMainBtn) {
+            copyMainBtn.addEventListener('click', () => {
+                this.copyToClipboard(isPassword ? item.password : item.content);
+            });
+        }
+
+        if (isPassword) {
+            const copyLoginBtn = menu.querySelector('.js-copy-login');
+            if (copyLoginBtn) {
+                copyLoginBtn.addEventListener('click', () => {
+                    this.copyToClipboard(item.login);
+                });
+            }
+        }
+
+        const viewNoteBtn = menu.querySelector('.js-view-note');
+        if (viewNoteBtn) {
+            viewNoteBtn.addEventListener('click', () => {
+                this.viewNote(item.id);
+            });
+        }
+
+        const addNewBtn = menu.querySelector('.js-add-new');
+        if (addNewBtn) {
+            addNewBtn.addEventListener('click', () => {
+                this.showAddModal();
+            });
+        }
+
+        const deleteBtn = menu.querySelector('.js-delete');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', () => {
+                this.confirmDelete(item.id);
+            });
+        }
 
         document.body.appendChild(menu);
     }
@@ -180,11 +218,14 @@ class SecretsManager {
                 return this.renderPassword(item);
             }
         }).join('');
+
+        // Setup event listeners for action buttons
+        this.setupItemEventListeners();
     }
 
     renderPassword(item) {
         return `
-            <div class="secret-item password" data-id="${item.id}" ondblclick="secretsManager.viewPassword('${item.id}')">
+            <div class="secret-item password" data-id="${item.id}" data-type="password">
                 <div class="secret-icon">
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
                         <circle cx="7" cy="7" r="5"/>
@@ -196,19 +237,19 @@ class SecretsManager {
                     <div class="secret-login">${this.escapeHtml(item.login)}</div>
                 </div>
                 <div class="secret-actions">
-                    <button class="secret-btn copy-login" title="Копировать логин" onclick="secretsManager.copyToClipboard('${this.escapeAttr(item.login)}', this)">
+                    <button class="secret-btn copy-login" title="Копировать логин" data-action="copy-login">
                         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
                             <rect x="4" y="4" width="8" height="8" rx="1"/>
                             <path d="M2 10V3a1 1 0 011-1h7"/>
                         </svg>
                     </button>
-                    <button class="secret-btn copy-password" title="Копировать пароль" onclick="secretsManager.copyToClipboard('${this.escapeAttr(item.password)}', this)">
+                    <button class="secret-btn copy-password" title="Копировать пароль" data-action="copy-password">
                         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
                             <circle cx="5" cy="5" r="3"/>
                             <path d="M7 7l5 5M10 10l1.5 1.5"/>
                         </svg>
                     </button>
-                    <button class="secret-btn delete" title="Удалить" onclick="secretsManager.confirmDelete('${item.id}')">
+                    <button class="secret-btn delete" title="Удалить" data-action="delete">
                         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
                             <path d="M2 4h10M5 4V2h4v2M6 7v4M8 7v4"/>
                             <path d="M3 4l1 8h6l1-8"/>
@@ -222,7 +263,7 @@ class SecretsManager {
     renderNote(item) {
         const preview = item.content.length > 50 ? item.content.substring(0, 50) + '...' : item.content;
         return `
-            <div class="secret-item note" data-id="${item.id}" ondblclick="secretsManager.viewNote('${item.id}')">
+            <div class="secret-item note" data-id="${item.id}" data-type="note">
                 <div class="secret-icon note-icon">
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
                         <rect x="3" y="2" width="14" height="16" rx="2"/>
@@ -234,19 +275,19 @@ class SecretsManager {
                     <div class="secret-login note-preview">${this.escapeHtml(preview)}</div>
                 </div>
                 <div class="secret-actions">
-                    <button class="secret-btn copy-note" title="Копировать" onclick="secretsManager.copyToClipboard(\`${this.escapeAttr(item.content)}\`, this)">
+                    <button class="secret-btn copy-note" title="Копировать" data-action="copy-content">
                         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
                             <rect x="4" y="4" width="8" height="8" rx="1"/>
                             <path d="M2 10V3a1 1 0 011-1h7"/>
                         </svg>
                     </button>
-                    <button class="secret-btn view-note" title="Просмотр" onclick="secretsManager.viewNote('${item.id}')">
+                    <button class="secret-btn view-note" title="Просмотр" data-action="view">
                         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
                             <circle cx="7" cy="7" r="2"/>
                             <path d="M1 7s2-4 6-4 6 4 6 4-2 4-6 4-6-4-6-4z"/>
                         </svg>
                     </button>
-                    <button class="secret-btn delete" title="Удалить" onclick="secretsManager.confirmDelete('${item.id}')">
+                    <button class="secret-btn delete" title="Удалить" data-action="delete">
                         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
                             <path d="M2 4h10M5 4V2h4v2M6 7v4M8 7v4"/>
                             <path d="M3 4l1 8h6l1-8"/>
@@ -269,6 +310,58 @@ class SecretsManager {
         return str.replace(/`/g, '\\`').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n');
     }
 
+    setupItemEventListeners() {
+        const container = document.getElementById('secretsList');
+        if (!container) return;
+
+        // Handle double-click on items to view them
+        container.addEventListener('dblclick', (e) => {
+            const item = e.target.closest('.secret-item');
+            if (!item) return;
+            
+            const id = item.dataset.id;
+            const type = item.dataset.type;
+            
+            if (type === 'password') {
+                this.viewPassword(id);
+            } else if (type === 'note') {
+                this.viewNote(id);
+            }
+        });
+
+        // Handle button clicks via event delegation
+        container.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-action]');
+            if (!btn) return;
+
+            const item = btn.closest('.secret-item');
+            if (!item) return;
+
+            const id = item.dataset.id;
+            const action = btn.dataset.action;
+            const itemData = this.items.find(i => i.id === id);
+            if (!itemData) return;
+
+            switch (action) {
+                case 'copy-login':
+                    this.copyToClipboard(itemData.login, btn);
+                    break;
+                case 'copy-password':
+                    this.copyToClipboard(itemData.password, btn);
+                    break;
+                case 'copy-content':
+                    this.copyToClipboard(itemData.content, btn);
+                    break;
+                case 'view':
+                    this.viewNote(id);
+                    break;
+                case 'delete':
+                    this.confirmDelete(id);
+                    break;
+            }
+        });
+    }
+
     // Модал выбора типа
     showAddModal() {
         const modal = document.createElement('div');
@@ -277,18 +370,18 @@ class SecretsManager {
             <div class="secrets-modal">
                 <div class="secrets-modal-header">
                     <h3>Добавить</h3>
-                    <button class="secrets-modal-close" onclick="secretsManager.closeModal()">×</button>
+                    <button class="secrets-modal-close">×</button>
                 </div>
                 <div class="secrets-modal-body">
                     <div class="add-type-buttons">
-                        <button class="add-type-btn" onclick="secretsManager.showPasswordModal()">
+                        <button class="add-type-btn" data-modal-action="show-password">
                             <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5">
                                 <circle cx="11" cy="11" r="7"/>
                                 <path d="M16 16l12 12M24 24l3 3M24 28l3-3"/>
                             </svg>
                             <span>Пароль / Токен</span>
                         </button>
-                        <button class="add-type-btn" onclick="secretsManager.showNoteModal()">
+                        <button class="add-type-btn" data-modal-action="show-note">
                             <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5">
                                 <rect x="5" y="3" width="22" height="26" rx="3"/>
                                 <path d="M10 10h12M10 16h12M10 22h8"/>
@@ -300,6 +393,7 @@ class SecretsManager {
             </div>
         `;
         document.body.appendChild(modal);
+        this.setupModalEventListeners(modal);
     }
 
     // Модал для пароля
@@ -311,7 +405,7 @@ class SecretsManager {
             <div class="secrets-modal">
                 <div class="secrets-modal-header">
                     <h3>Добавить пароль</h3>
-                    <button class="secrets-modal-close" onclick="secretsManager.closeModal()">×</button>
+                    <button class="secrets-modal-close">×</button>
                 </div>
                 <div class="secrets-modal-body">
                     <div class="form-group">
@@ -332,12 +426,13 @@ class SecretsManager {
                     </div>
                 </div>
                 <div class="secrets-modal-footer">
-                    <button class="btn btn-secondary" onclick="secretsManager.closeModal()">Отмена</button>
-                    <button class="btn btn-primary" onclick="secretsManager.savePassword()">Сохранить</button>
+                    <button class="btn btn-secondary" data-modal-action="close">Отмена</button>
+                    <button class="btn btn-primary" data-modal-action="save-password">Сохранить</button>
                 </div>
             </div>
         `;
         document.body.appendChild(modal);
+        this.setupModalEventListeners(modal);
         setTimeout(() => document.getElementById('secretName')?.focus(), 100);
     }
 
@@ -350,7 +445,7 @@ class SecretsManager {
             <div class="secrets-modal">
                 <div class="secrets-modal-header">
                     <h3>Добавить заметку</h3>
-                    <button class="secrets-modal-close" onclick="secretsManager.closeModal()">×</button>
+                    <button class="secrets-modal-close">×</button>
                 </div>
                 <div class="secrets-modal-body">
                     <div class="form-group">
@@ -363,12 +458,13 @@ class SecretsManager {
                     </div>
                 </div>
                 <div class="secrets-modal-footer">
-                    <button class="btn btn-secondary" onclick="secretsManager.closeModal()">Отмена</button>
-                    <button class="btn btn-primary" onclick="secretsManager.saveNote()">Сохранить</button>
+                    <button class="btn btn-secondary" data-modal-action="close">Отмена</button>
+                    <button class="btn btn-primary" data-modal-action="save-note">Сохранить</button>
                 </div>
             </div>
         `;
         document.body.appendChild(modal);
+        this.setupModalEventListeners(modal);
         setTimeout(() => document.getElementById('noteTitle')?.focus(), 100);
     }
 
@@ -379,25 +475,26 @@ class SecretsManager {
 
         const modal = document.createElement('div');
         modal.className = 'secrets-modal-overlay';
+        modal.dataset.itemId = id;
         modal.innerHTML = `
             <div class="secrets-modal">
                 <div class="secrets-modal-header desktop-style">
                     <div class="modal-title-text">👤 ${this.escapeHtml(item.name)}</div>
-                    <button class="secrets-modal-close" onclick="secretsManager.closeModal()">×</button>
+                    <button class="secrets-modal-close">×</button>
                 </div>
                 <div class="secrets-modal-body">
                     <div class="detail-row">
                         <label>Логин:</label>
                         <div class="detail-value-wrapper">
                             <span>${this.escapeHtml(item.login)}</span>
-                            <button class="mini-copy-btn" onclick="secretsManager.copyToClipboard('${this.escapeAttr(item.login)}', this)">📋</button>
+                            <button class="mini-copy-btn" data-modal-action="copy-login">📋</button>
                         </div>
                     </div>
                     <div class="detail-row">
                         <label>Пароль / Токен:</label>
                         <div class="detail-value-wrapper">
                             <span class="password-hidden">••••••••••••</span>
-                            <button class="mini-copy-btn" onclick="secretsManager.copyToClipboard('${this.escapeAttr(item.password)}', this)">📋 Копировать</button>
+                            <button class="mini-copy-btn" data-modal-action="copy-password">📋 Копировать</button>
                         </div>
                     </div>
                     ${item.url ? `
@@ -410,11 +507,12 @@ class SecretsManager {
                     ` : ''}
                 </div>
                 <div class="secrets-modal-footer">
-                    <button class="btn btn-secondary" onclick="secretsManager.closeModal()">Закрыть</button>
+                    <button class="btn btn-secondary" data-modal-action="close">Закрыть</button>
                 </div>
             </div>
         `;
         document.body.appendChild(modal);
+        this.setupModalEventListeners(modal);
     }
 
     // Просмотр заметки
@@ -424,22 +522,74 @@ class SecretsManager {
 
         const modal = document.createElement('div');
         modal.className = 'secrets-modal-overlay';
+        modal.dataset.itemId = id;
         modal.innerHTML = `
             <div class="secrets-modal">
                 <div class="secrets-modal-header desktop-style">
                     <div class="modal-title-text">📝 ${this.escapeHtml(item.title)}</div>
-                    <button class="secrets-modal-close" onclick="secretsManager.closeModal()">×</button>
+                    <button class="secrets-modal-close">×</button>
                 </div>
                 <div class="secrets-modal-body">
                     <pre class="note-content-view">${this.escapeHtml(item.content)}</pre>
                 </div>
                 <div class="secrets-modal-footer">
-                    <button class="btn btn-secondary" onclick="secretsManager.closeModal()">Закрыть</button>
-                    <button class="btn btn-primary" onclick="secretsManager.copyToClipboard(\`${this.escapeAttr(item.content)}\`, this)">Копировать текст</button>
+                    <button class="btn btn-secondary" data-modal-action="close">Закрыть</button>
+                    <button class="btn btn-primary" data-modal-action="copy-content">Копировать текст</button>
                 </div>
             </div>
         `;
         document.body.appendChild(modal);
+        this.setupModalEventListeners(modal);
+    }
+
+    setupModalEventListeners(modal) {
+        // Handle close button
+        const closeBtn = modal.querySelector('.secrets-modal-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => this.closeModal());
+        }
+
+        // Handle modal actions
+        modal.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-modal-action]');
+            if (!btn) return;
+
+            const action = btn.dataset.modalAction;
+            const itemId = modal.dataset.itemId;
+
+            switch (action) {
+                case 'close':
+                    this.closeModal();
+                    break;
+                case 'show-password':
+                    this.showPasswordModal();
+                    break;
+                case 'show-note':
+                    this.showNoteModal();
+                    break;
+                case 'save-password':
+                    this.savePassword();
+                    break;
+                case 'save-note':
+                    this.saveNote();
+                    break;
+                case 'copy-login': {
+                    const item = this.items.find(i => i.id === itemId);
+                    if (item) this.copyToClipboard(item.login, btn);
+                    break;
+                }
+                case 'copy-password': {
+                    const item = this.items.find(i => i.id === itemId);
+                    if (item) this.copyToClipboard(item.password, btn);
+                    break;
+                }
+                case 'copy-content': {
+                    const item = this.items.find(i => i.id === itemId);
+                    if (item) this.copyToClipboard(item.content, btn);
+                    break;
+                }
+            }
+        });
     }
 
     closeModal() {
