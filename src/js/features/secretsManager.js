@@ -5,131 +5,135 @@
 const STORAGE_KEY = 'GITODY_SECRETS';
 
 class SecretsManager {
-    constructor() {
-        this.items = this.load();
-        this._rawItems = [...this.items]; // Бекап в памяти
-        this.init();
-        this.setupPersistenceCheck();
-    }
+  constructor() {
+    this.items = this.load();
+    this._rawItems = [...this.items]; // Бекап в памяти
+    this.init();
+    this.setupPersistenceCheck();
+  }
 
-    setupPersistenceCheck() {
-        // Проверка каждые 10 секунд что данные не пропали из localStorage
-        setInterval(() => {
-            const stored = localStorage.getItem(STORAGE_KEY);
-            if (this._rawItems.length > 0) {
-                try {
-                    if (!stored || JSON.parse(stored).length === 0) {
-                        console.error('[Secrets] DATA WAS LOST! Restoring from memory...');
-                        this.save();
-                    }
-                } catch (e) {
-                    this.save();
-                }
-            }
-        }, 10000);
-    }
-
-    init() {
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                this.render();
-                this.setupContextMenu();
-                this.setupEventDelegation();
-            });
-        } else {
-            this.render();
-            this.setupContextMenu();
-            this.setupEventDelegation();
+  setupPersistenceCheck() {
+    // Проверка каждые 10 секунд что данные не пропали из localStorage
+    setInterval(() => {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (this._rawItems.length > 0) {
+        try {
+          if (!stored || JSON.parse(stored).length === 0) {
+            console.error('[Secrets] DATA WAS LOST! Restoring from memory...');
+            this.save();
+          }
+        } catch (e) {
+          this.save();
         }
+      }
+    }, 10000);
+  }
+
+  init() {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        this.render();
+        this.setupContextMenu();
+        this.setupEventDelegation();
+      });
+    } else {
+      this.render();
+      this.setupContextMenu();
+      this.setupEventDelegation();
     }
+  }
 
-    setupContextMenu() {
-        document.addEventListener('contextmenu', (e) => {
-            const item = e.target.closest('.secret-item');
-            if (item) {
-                e.preventDefault();
-                this.showContextMenu(e, item.dataset.id);
-            }
-        });
+  setupContextMenu() {
+    document.addEventListener('contextmenu', e => {
+      const item = e.target.closest('.secret-item');
+      if (item) {
+        e.preventDefault();
+        this.showContextMenu(e, item.dataset.id);
+      }
+    });
 
-        document.addEventListener('click', () => this.hideContextMenu());
-    }
+    document.addEventListener('click', () => this.hideContextMenu());
+  }
 
-    setupEventDelegation() {
-        const container = document.getElementById('secretsList');
-        if (!container) return;
+  setupEventDelegation() {
+    const container = document.getElementById('secretsList');
+    if (!container) return;
 
-        // Handle button clicks via event delegation
-        container.addEventListener('click', (e) => {
-            const button = e.target.closest('[data-action]');
-            if (!button) return;
+    // Handle button clicks via event delegation
+    container.addEventListener('click', e => {
+      const button = e.target.closest('[data-action]');
+      if (!button) return;
 
-            const secretItem = button.closest('.secret-item');
-            if (!secretItem) return;
+      const secretItem = button.closest('.secret-item');
+      if (!secretItem) return;
 
-            const id = secretItem.dataset.id;
-            const action = button.dataset.action;
-            const item = this.items.find(i => i.id === id);
-            if (!item) return;
+      const id = secretItem.dataset.id;
+      const action = button.dataset.action;
+      const item = this.items.find(i => i.id === id);
+      if (!item) return;
 
-            e.stopPropagation();
+      e.stopPropagation();
 
-            switch(action) {
-                case 'copy-login':
-                    this.copyToClipboard(item.login, button);
-                    break;
-                case 'copy-password':
-                    this.copyToClipboard(item.password, button);
-                    break;
-                case 'copy-note':
-                    this.copyToClipboard(item.content, button);
-                    break;
-                case 'view-note':
-                    this.viewNote(id);
-                    break;
-                case 'delete':
-                    this.confirmDelete(id);
-                    break;
-            }
-        });
+      switch (action) {
+        case 'copy-login':
+          this.copyToClipboard(item.login, button);
+          break;
+        case 'copy-password':
+          this.copyToClipboard(item.password, button);
+          break;
+        case 'copy-note':
+          this.copyToClipboard(item.content, button);
+          break;
+        case 'view-note':
+          this.viewNote(id);
+          break;
+        case 'delete':
+          this.confirmDelete(id);
+          break;
+      }
+    });
 
-        // Handle double-click to view
-        container.addEventListener('dblclick', (e) => {
-            const secretItem = e.target.closest('.secret-item');
-            if (!secretItem) return;
+    // Handle double-click to view
+    container.addEventListener('dblclick', e => {
+      const secretItem = e.target.closest('.secret-item');
+      if (!secretItem) return;
 
-            const id = secretItem.dataset.id;
-            const type = secretItem.dataset.type;
+      const id = secretItem.dataset.id;
+      const type = secretItem.dataset.type;
 
-            if (type === 'password') {
-                this.viewPassword(id);
-            } else if (type === 'note') {
-                this.viewNote(id);
-            }
-        });
-    }
+      if (type === 'password') {
+        this.viewPassword(id);
+      } else if (type === 'note') {
+        this.viewNote(id);
+      }
+    });
+  }
 
-    showContextMenu(e, id) {
-        this.hideContextMenu();
-        const item = this.items.find(i => i.id === id);
-        if (!item) return;
+  showContextMenu(e, id) {
+    this.hideContextMenu();
+    const item = this.items.find(i => i.id === id);
+    if (!item) return;
 
-        const menu = document.createElement('div');
-        menu.className = 'custom-context-menu';
-        menu.style.left = e.pageX + 'px';
-        menu.style.top = e.pageY + 'px';
+    const menu = document.createElement('div');
+    menu.className = 'custom-context-menu';
+    menu.style.left = e.pageX + 'px';
+    menu.style.top = e.pageY + 'px';
 
-        const isPassword = item.type === 'password';
+    const isPassword = item.type === 'password';
 
-        menu.innerHTML = `
+    menu.innerHTML = `
             <div class="context-menu-item js-copy-main">
                 <span>📋</span> Копировать ${isPassword ? 'пароль' : 'текст'}
             </div>
-            ${isPassword ? `
+            ${
+              isPassword
+                ? `
             <div class="context-menu-item js-copy-login">
                 <span>👤</span> Копировать логин
             </div>
-            ` : ''}
+            `
+                : ''
+            }
             <div class="context-menu-divider"></div>
             <div class="context-menu-item js-view-note">
                 <span>👁️</span> Открыть / Просмотреть
@@ -143,140 +147,142 @@ class SecretsManager {
             </div>
         `;
 
-        const copyMainBtn = menu.querySelector('.js-copy-main');
-        if (copyMainBtn) {
-            copyMainBtn.addEventListener('click', () => {
-                this.copyToClipboard(isPassword ? item.password : item.content);
-            });
+    const copyMainBtn = menu.querySelector('.js-copy-main');
+    if (copyMainBtn) {
+      copyMainBtn.addEventListener('click', () => {
+        this.copyToClipboard(isPassword ? item.password : item.content);
+      });
+    }
+
+    if (isPassword) {
+      const copyLoginBtn = menu.querySelector('.js-copy-login');
+      if (copyLoginBtn) {
+        copyLoginBtn.addEventListener('click', () => {
+          this.copyToClipboard(item.login);
+        });
+      }
+    }
+
+    const viewNoteBtn = menu.querySelector('.js-view-note');
+    if (viewNoteBtn) {
+      viewNoteBtn.addEventListener('click', () => {
+        this.viewNote(item.id);
+      });
+    }
+
+    const addNewBtn = menu.querySelector('.js-add-new');
+    if (addNewBtn) {
+      addNewBtn.addEventListener('click', () => {
+        this.showAddModal();
+      });
+    }
+
+    const deleteBtn = menu.querySelector('.js-delete');
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', () => {
+        this.confirmDelete(item.id);
+      });
+    }
+
+    document.body.appendChild(menu);
+  }
+
+  hideContextMenu() {
+    const existing = document.querySelector('.custom-context-menu');
+    if (existing) existing.remove();
+  }
+
+  load() {
+    try {
+      const data = localStorage.getItem(STORAGE_KEY);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  save() {
+    this._rawItems = [...this.items];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.items));
+  }
+
+  // Добавить пароль
+  addPassword(name, login, password, url = '') {
+    const item = {
+      id: Date.now().toString(),
+      type: 'password',
+      name,
+      login,
+      password,
+      url,
+      createdAt: new Date().toISOString(),
+    };
+    this.items.push(item);
+    this.save();
+    this.render();
+    return item;
+  }
+
+  // Добавить заметку
+  addNote(title, content) {
+    const item = {
+      id: Date.now().toString(),
+      type: 'note',
+      title,
+      content,
+      createdAt: new Date().toISOString(),
+    };
+    this.items.push(item);
+    this.save();
+    this.render();
+    return item;
+  }
+
+  remove(id) {
+    this.items = this.items.filter(s => s.id !== id);
+    this.save();
+    this.render();
+  }
+
+  async copyToClipboard(text, btn) {
+    try {
+      await navigator.clipboard.writeText(text);
+      if (btn) {
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#3fb950" stroke-width="2"><path d="M2 7l3 3 7-7"/></svg>`;
+        btn.style.background = 'rgba(63, 185, 80, 0.2)';
+        setTimeout(() => {
+          btn.innerHTML = originalHTML;
+          btn.style.background = '';
+        }, 1500);
+      }
+    } catch (e) {
+      console.error('Copy failed:', e);
+    }
+  }
+
+  render() {
+    const container = document.getElementById('secretsList');
+    if (!container) return;
+
+    if (this.items.length === 0) {
+      container.innerHTML = '<div class="empty-state">Нет сохранённых данных</div>';
+      return;
+    }
+
+    container.innerHTML = this.items
+      .map(item => {
+        if (item.type === 'note') {
+          return this.renderNote(item);
+        } else {
+          return this.renderPassword(item);
         }
+      })
+      .join('');
+  }
 
-        if (isPassword) {
-            const copyLoginBtn = menu.querySelector('.js-copy-login');
-            if (copyLoginBtn) {
-                copyLoginBtn.addEventListener('click', () => {
-                    this.copyToClipboard(item.login);
-                });
-            }
-        }
-
-        const viewNoteBtn = menu.querySelector('.js-view-note');
-        if (viewNoteBtn) {
-            viewNoteBtn.addEventListener('click', () => {
-                this.viewNote(item.id);
-            });
-        }
-
-        const addNewBtn = menu.querySelector('.js-add-new');
-        if (addNewBtn) {
-            addNewBtn.addEventListener('click', () => {
-                this.showAddModal();
-            });
-        }
-
-        const deleteBtn = menu.querySelector('.js-delete');
-        if (deleteBtn) {
-            deleteBtn.addEventListener('click', () => {
-                this.confirmDelete(item.id);
-            });
-        }
-
-        document.body.appendChild(menu);
-    }
-
-    hideContextMenu() {
-        const existing = document.querySelector('.custom-context-menu');
-        if (existing) existing.remove();
-    }
-
-    load() {
-        try {
-            const data = localStorage.getItem(STORAGE_KEY);
-            return data ? JSON.parse(data) : [];
-        } catch {
-            return [];
-        }
-    }
-
-    save() {
-        this._rawItems = [...this.items];
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.items));
-    }
-
-    // Добавить пароль
-    addPassword(name, login, password, url = '') {
-        const item = {
-            id: Date.now().toString(),
-            type: 'password',
-            name,
-            login,
-            password,
-            url,
-            createdAt: new Date().toISOString()
-        };
-        this.items.push(item);
-        this.save();
-        this.render();
-        return item;
-    }
-
-    // Добавить заметку
-    addNote(title, content) {
-        const item = {
-            id: Date.now().toString(),
-            type: 'note',
-            title,
-            content,
-            createdAt: new Date().toISOString()
-        };
-        this.items.push(item);
-        this.save();
-        this.render();
-        return item;
-    }
-
-    remove(id) {
-        this.items = this.items.filter(s => s.id !== id);
-        this.save();
-        this.render();
-    }
-
-    async copyToClipboard(text, btn) {
-        try {
-            await navigator.clipboard.writeText(text);
-            if (btn) {
-                const originalHTML = btn.innerHTML;
-                btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#3fb950" stroke-width="2"><path d="M2 7l3 3 7-7"/></svg>`;
-                btn.style.background = 'rgba(63, 185, 80, 0.2)';
-                setTimeout(() => {
-                    btn.innerHTML = originalHTML;
-                    btn.style.background = '';
-                }, 1500);
-            }
-        } catch (e) {
-            console.error('Copy failed:', e);
-        }
-    }
-
-    render() {
-        const container = document.getElementById('secretsList');
-        if (!container) return;
-
-        if (this.items.length === 0) {
-            container.innerHTML = '<div class="empty-state">Нет сохранённых данных</div>';
-            return;
-        }
-
-        container.innerHTML = this.items.map(item => {
-            if (item.type === 'note') {
-                return this.renderNote(item);
-            } else {
-                return this.renderPassword(item);
-            }
-        }).join('');
-    }
-
-    renderPassword(item) {
-        return `
+  renderPassword(item) {
+    return `
             <div class="secret-item password" data-id="${item.id}" data-type="password">
                 <div class="secret-icon">
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -310,11 +316,11 @@ class SecretsManager {
                 </div>
             </div>
         `;
-    }
+  }
 
-    renderNote(item) {
-        const preview = item.content.length > 50 ? item.content.substring(0, 50) + '...' : item.content;
-        return `
+  renderNote(item) {
+    const preview = item.content.length > 50 ? item.content.substring(0, 50) + '...' : item.content;
+    return `
             <div class="secret-item note" data-id="${item.id}" data-type="note">
                 <div class="secret-icon note-icon">
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -348,25 +354,25 @@ class SecretsManager {
                 </div>
             </div>
         `;
-    }
+  }
 
-    escapeHtml(str) {
-        if (!str) return '';
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-    }
+  escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
 
-    escapeAttr(str) {
-        if (!str) return '';
-        return str.replace(/`/g, '\\`').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n');
-    }
+  escapeAttr(str) {
+    if (!str) return '';
+    return str.replace(/`/g, '\\`').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n');
+  }
 
-    // Модал выбора типа
-    showAddModal() {
-        const modal = document.createElement('div');
-        modal.className = 'secrets-modal-overlay';
-        modal.innerHTML = `
+  // Модал выбора типа
+  showAddModal() {
+    const modal = document.createElement('div');
+    modal.className = 'secrets-modal-overlay';
+    modal.innerHTML = `
             <div class="secrets-modal">
                 <div class="secrets-modal-header">
                     <h3>Добавить</h3>
@@ -392,32 +398,32 @@ class SecretsManager {
                 </div>
             </div>
         `;
-        
-        // Setup event listeners
-        const closeBtn = modal.querySelector('.js-modal-close');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => this.closeModal());
-        }
 
-        const showPasswordBtn = modal.querySelector('.js-show-password-modal');
-        if (showPasswordBtn) {
-            showPasswordBtn.addEventListener('click', () => this.showPasswordModal());
-        }
-
-        const showNoteBtn = modal.querySelector('.js-show-note-modal');
-        if (showNoteBtn) {
-            showNoteBtn.addEventListener('click', () => this.showNoteModal());
-        }
-
-        document.body.appendChild(modal);
+    // Setup event listeners
+    const closeBtn = modal.querySelector('.js-modal-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => this.closeModal());
     }
 
-    // Модал для пароля
-    showPasswordModal() {
-        this.closeModal();
-        const modal = document.createElement('div');
-        modal.className = 'secrets-modal-overlay';
-        modal.innerHTML = `
+    const showPasswordBtn = modal.querySelector('.js-show-password-modal');
+    if (showPasswordBtn) {
+      showPasswordBtn.addEventListener('click', () => this.showPasswordModal());
+    }
+
+    const showNoteBtn = modal.querySelector('.js-show-note-modal');
+    if (showNoteBtn) {
+      showNoteBtn.addEventListener('click', () => this.showNoteModal());
+    }
+
+    document.body.appendChild(modal);
+  }
+
+  // Модал для пароля
+  showPasswordModal() {
+    this.closeModal();
+    const modal = document.createElement('div');
+    modal.className = 'secrets-modal-overlay';
+    modal.innerHTML = `
             <div class="secrets-modal">
                 <div class="secrets-modal-header">
                     <h3>Добавить пароль</h3>
@@ -447,33 +453,33 @@ class SecretsManager {
                 </div>
             </div>
         `;
-        
-        // Setup event listeners
-        const closeBtn = modal.querySelector('.js-modal-close');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => this.closeModal());
-        }
 
-        const cancelBtn = modal.querySelector('.js-modal-cancel');
-        if (cancelBtn) {
-            cancelBtn.addEventListener('click', () => this.closeModal());
-        }
-
-        const saveBtn = modal.querySelector('.js-save-password');
-        if (saveBtn) {
-            saveBtn.addEventListener('click', () => this.savePassword());
-        }
-
-        document.body.appendChild(modal);
-        setTimeout(() => document.getElementById('secretName')?.focus(), 100);
+    // Setup event listeners
+    const closeBtn = modal.querySelector('.js-modal-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => this.closeModal());
     }
 
-    // Модал для заметки
-    showNoteModal() {
-        this.closeModal();
-        const modal = document.createElement('div');
-        modal.className = 'secrets-modal-overlay';
-        modal.innerHTML = `
+    const cancelBtn = modal.querySelector('.js-modal-cancel');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', () => this.closeModal());
+    }
+
+    const saveBtn = modal.querySelector('.js-save-password');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', () => this.savePassword());
+    }
+
+    document.body.appendChild(modal);
+    setTimeout(() => document.getElementById('secretName')?.focus(), 100);
+  }
+
+  // Модал для заметки
+  showNoteModal() {
+    this.closeModal();
+    const modal = document.createElement('div');
+    modal.className = 'secrets-modal-overlay';
+    modal.innerHTML = `
             <div class="secrets-modal">
                 <div class="secrets-modal-header">
                     <h3>Добавить заметку</h3>
@@ -495,35 +501,35 @@ class SecretsManager {
                 </div>
             </div>
         `;
-        
-        // Setup event listeners
-        const closeBtn = modal.querySelector('.js-modal-close');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => this.closeModal());
-        }
 
-        const cancelBtn = modal.querySelector('.js-modal-cancel');
-        if (cancelBtn) {
-            cancelBtn.addEventListener('click', () => this.closeModal());
-        }
-
-        const saveBtn = modal.querySelector('.js-save-note');
-        if (saveBtn) {
-            saveBtn.addEventListener('click', () => this.saveNote());
-        }
-
-        document.body.appendChild(modal);
-        setTimeout(() => document.getElementById('noteTitle')?.focus(), 100);
+    // Setup event listeners
+    const closeBtn = modal.querySelector('.js-modal-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => this.closeModal());
     }
 
-    // Просмотр пароля
-    viewPassword(id) {
-        const item = this.items.find(i => i.id === id);
-        if (!item) return;
+    const cancelBtn = modal.querySelector('.js-modal-cancel');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', () => this.closeModal());
+    }
 
-        const modal = document.createElement('div');
-        modal.className = 'secrets-modal-overlay';
-        modal.innerHTML = `
+    const saveBtn = modal.querySelector('.js-save-note');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', () => this.saveNote());
+    }
+
+    document.body.appendChild(modal);
+    setTimeout(() => document.getElementById('noteTitle')?.focus(), 100);
+  }
+
+  // Просмотр пароля
+  viewPassword(id) {
+    const item = this.items.find(i => i.id === id);
+    if (!item) return;
+
+    const modal = document.createElement('div');
+    modal.className = 'secrets-modal-overlay';
+    modal.innerHTML = `
             <div class="secrets-modal">
                 <div class="secrets-modal-header desktop-style">
                     <div class="modal-title-text">👤 ${this.escapeHtml(item.name)}</div>
@@ -544,57 +550,61 @@ class SecretsManager {
                             <button class="mini-copy-btn js-copy-password" data-copy-type="password">📋 Копировать</button>
                         </div>
                     </div>
-                    ${item.url ? `
+                    ${
+                      item.url
+                        ? `
                     <div class="detail-row">
                         <label>URL:</label>
                         <div class="detail-value-wrapper">
                             <a href="${item.url}" target="_blank" class="detail-link">${this.escapeHtml(item.url)}</a>
                         </div>
                     </div>
-                    ` : ''}
+                    `
+                        : ''
+                    }
                 </div>
                 <div class="secrets-modal-footer">
                     <button class="btn btn-secondary js-modal-close-footer">Закрыть</button>
                 </div>
             </div>
         `;
-        
-        // Setup event listeners for modal
-        const closeBtn = modal.querySelector('.js-modal-close');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => this.closeModal());
-        }
 
-        const closeFooterBtn = modal.querySelector('.js-modal-close-footer');
-        if (closeFooterBtn) {
-            closeFooterBtn.addEventListener('click', () => this.closeModal());
-        }
-
-        const copyLoginBtn = modal.querySelector('.js-copy-login');
-        if (copyLoginBtn) {
-            copyLoginBtn.addEventListener('click', (e) => {
-                this.copyToClipboard(item.login, e.target);
-            });
-        }
-
-        const copyPasswordBtn = modal.querySelector('.js-copy-password');
-        if (copyPasswordBtn) {
-            copyPasswordBtn.addEventListener('click', (e) => {
-                this.copyToClipboard(item.password, e.target);
-            });
-        }
-
-        document.body.appendChild(modal);
+    // Setup event listeners for modal
+    const closeBtn = modal.querySelector('.js-modal-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => this.closeModal());
     }
 
-    // Просмотр заметки
-    viewNote(id) {
-        const item = this.items.find(i => i.id === id);
-        if (!item) return;
+    const closeFooterBtn = modal.querySelector('.js-modal-close-footer');
+    if (closeFooterBtn) {
+      closeFooterBtn.addEventListener('click', () => this.closeModal());
+    }
 
-        const modal = document.createElement('div');
-        modal.className = 'secrets-modal-overlay';
-        modal.innerHTML = `
+    const copyLoginBtn = modal.querySelector('.js-copy-login');
+    if (copyLoginBtn) {
+      copyLoginBtn.addEventListener('click', e => {
+        this.copyToClipboard(item.login, e.target);
+      });
+    }
+
+    const copyPasswordBtn = modal.querySelector('.js-copy-password');
+    if (copyPasswordBtn) {
+      copyPasswordBtn.addEventListener('click', e => {
+        this.copyToClipboard(item.password, e.target);
+      });
+    }
+
+    document.body.appendChild(modal);
+  }
+
+  // Просмотр заметки
+  viewNote(id) {
+    const item = this.items.find(i => i.id === id);
+    if (!item) return;
+
+    const modal = document.createElement('div');
+    modal.className = 'secrets-modal-overlay';
+    modal.innerHTML = `
             <div class="secrets-modal">
                 <div class="secrets-modal-header desktop-style">
                     <div class="modal-title-text">📝 ${this.escapeHtml(item.title)}</div>
@@ -609,63 +619,78 @@ class SecretsManager {
                 </div>
             </div>
         `;
-        
-        // Setup event listeners for modal
-        const closeBtn = modal.querySelector('.js-modal-close');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => this.closeModal());
-        }
 
-        const closeFooterBtn = modal.querySelector('.js-modal-close-footer');
-        if (closeFooterBtn) {
-            closeFooterBtn.addEventListener('click', () => this.closeModal());
-        }
-
-        const copyContentBtn = modal.querySelector('.js-copy-content');
-        if (copyContentBtn) {
-            copyContentBtn.addEventListener('click', (e) => {
-                this.copyToClipboard(item.content, e.target);
-            });
-        }
-
-        document.body.appendChild(modal);
+    // Setup event listeners for modal
+    const closeBtn = modal.querySelector('.js-modal-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => this.closeModal());
     }
 
-    closeModal() {
-        const modal = document.querySelector('.secrets-modal-overlay');
-        if (modal) modal.remove();
+    const closeFooterBtn = modal.querySelector('.js-modal-close-footer');
+    if (closeFooterBtn) {
+      closeFooterBtn.addEventListener('click', () => this.closeModal());
     }
 
-    savePassword() {
-        const name = document.getElementById('secretName')?.value.trim();
-        const login = document.getElementById('secretLogin')?.value.trim();
-        const password = document.getElementById('secretPassword')?.value;
-        const url = document.getElementById('secretUrl')?.value.trim() || '';
-
-        if (!name) { alert('Введите название'); return; }
-        if (!login) { alert('Введите логин'); return; }
-        if (!password) { alert('Введите пароль'); return; }
-
-        this.addPassword(name, login, password, url);
-        this.closeModal();
+    const copyContentBtn = modal.querySelector('.js-copy-content');
+    if (copyContentBtn) {
+      copyContentBtn.addEventListener('click', e => {
+        this.copyToClipboard(item.content, e.target);
+      });
     }
 
-    saveNote() {
-        const title = document.getElementById('noteTitle')?.value.trim();
-        const content = document.getElementById('noteContent')?.value;
+    document.body.appendChild(modal);
+  }
 
-        if (!title) { alert('Введите заголовок'); return; }
-        if (!content) { alert('Введите содержимое'); return; }
+  closeModal() {
+    const modal = document.querySelector('.secrets-modal-overlay');
+    if (modal) modal.remove();
+  }
 
-        this.addNote(title, content);
-        this.closeModal();
+  savePassword() {
+    const name = document.getElementById('secretName')?.value.trim();
+    const login = document.getElementById('secretLogin')?.value.trim();
+    const password = document.getElementById('secretPassword')?.value;
+    const url = document.getElementById('secretUrl')?.value.trim() || '';
+
+    if (!name) {
+      alert('Введите название');
+      return;
+    }
+    if (!login) {
+      alert('Введите логин');
+      return;
+    }
+    if (!password) {
+      alert('Введите пароль');
+      return;
     }
 
-    confirmDelete(id) {
-        if (confirm('Удалить?')) {
-            this.remove(id);
-        }
+    this.addPassword(name, login, password, url);
+    this.closeModal();
+  }
+
+  saveNote() {
+    const title = document.getElementById('noteTitle')?.value.trim();
+    const content = document.getElementById('noteContent')?.value;
+
+    if (!title) {
+      alert('Введите заголовок');
+      return;
     }
+    if (!content) {
+      alert('Введите содержимое');
+      return;
+    }
+
+    this.addNote(title, content);
+    this.closeModal();
+  }
+
+  confirmDelete(id) {
+    if (confirm('Удалить?')) {
+      this.remove(id);
+    }
+  }
 }
 
 export const secretsManager = new SecretsManager();
