@@ -110,13 +110,6 @@ export class NavRing {
             if (content) content.classList.add('active');
         });
 
-<<<<<<< Current (Your changes)
-=======
-        // Переключить контент
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        const content = document.getElementById(tabName);
-        if (content) content.classList.add('active');
-
         // Lazy init мониторов при переходе на settings
         if (tabName === 'settings') {
             this.initMonitorsOnDemand();
@@ -125,7 +118,6 @@ export class NavRing {
             this.stopMonitors();
         }
 
->>>>>>> Incoming (Background Agent changes)
         // СОХРАНИТЬ в session
         session.setActiveTab(tabName);
     }
