@@ -26,7 +26,6 @@ import { repoManager } from './sidebar/repoManager.js';
 import { githubManager } from './api/githubManager.js';
 import { secretsManager } from './features/secretsManager.js';
 import { systemMonitor } from './features/systemMonitor.js';
-import { networkManager } from './features/networkManager.js';
 import { diskManager } from './features/diskManager.js';
 import { speechManager } from './features/speechManager.js';
 import { aiManager } from './features/aiManager.js';
