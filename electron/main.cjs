@@ -150,8 +150,6 @@ function createWindow() {
         });
     });
     
-    ses.setCertificateVerifyProc((request, callback) => callback(0));
-
     // SMART URL SWITCH
     const isDev = process.env.ELECTRON_DEV === 'true';
     let url = isDev ? 'http://localhost:5173' : 'http://127.0.0.1:47523';
