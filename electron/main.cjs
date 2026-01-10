@@ -10,8 +10,14 @@ const os = require('os');
 const dns = require('dns');
 const net = require('net');
 
-// Отключить sandbox для Linux (необходимо для работы в некоторых средах)
+// === Security Note ===
+// 'no-sandbox' is required for certain Linux environments (e.g., Docker, CI/CD)
+// where the kernel lacks necessary features for Chromium's sandbox.
+// This reduces security isolation. Consider removing if not deploying to such environments.
 app.commandLine.appendSwitch('no-sandbox');
+
+// Disables software-based rendering fallback to improve performance
+// when hardware acceleration is available
 app.commandLine.appendSwitch('disable-software-rasterizer');
 
 // === Флаги для микрофона и Web Speech API ===
@@ -149,8 +155,6 @@ function createWindow() {
             else callback({});
         });
     });
-    
-    ses.setCertificateVerifyProc((request, callback) => callback(0));
 
     // SMART URL SWITCH
     const isDev = process.env.ELECTRON_DEV === 'true';
