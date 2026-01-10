@@ -1,9 +1,9 @@
 /**
- * System Monitor Real - Продвинутый мониторинг системы
+ * System Monitor - Продвинутый мониторинг системы
  * Реальные данные через systeminformation
  */
 
-class SystemMonitorReal {
+class SystemMonitor {
     constructor() {
         this.monitoringActive = false;
         this.monitoringInterval = null;
@@ -1387,5 +1387,5 @@ class SystemMonitorReal {
     }
 }
 
-export const systemMonitor = new SystemMonitorReal();
+export const systemMonitor = new SystemMonitor();
 window.systemMonitor = systemMonitor;
