@@ -1,7 +1,7 @@
 {
-  "name": "github-manager",
+  "name": "gitody",
   "version": "1.0.0",
-  "description": "GitHub Repository Manager - Web and Electron Application",
+  "description": "GiTody - GitHub Repository Manager - Web and Electron Application",
   "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
@@ -37,8 +37,8 @@
     "systeminformation": "5.29.1"
   },
   "build": {
-    "appId": "com.githubmanager.app",
-    "productName": "GitHub Manager",
+    "appId": "com.gitody.app",
+    "productName": "GiTody",
     "directories": {
       "output": "dist-electron"
     },
