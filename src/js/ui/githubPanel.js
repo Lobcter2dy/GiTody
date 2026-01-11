@@ -63,58 +63,93 @@ export class GitHubPanelManager {
 
     // API методы для работы с данными
     async loadBranches() {
-        // TODO: Загрузка веток из GitHub API
-        console.log('[GitHubPanel] Loading branches...');
+        if (!window.githubManager || !window.githubManager.currentRepo) {
+            console.warn('[GitHubPanel] GitHubManager not available or no repo selected');
+            return [];
+        }
+        const repoName = window.githubManager.currentRepo.full_name;
+        return await window.githubManager.fetchBranches(repoName);
     }
 
     async loadPullRequests() {
-        // TODO: Загрузка PR из GitHub API
-        console.log('[GitHubPanel] Loading pull requests...');
+        if (!window.githubManager || !window.githubManager.currentRepo) {
+            console.warn('[GitHubPanel] GitHubManager not available or no repo selected');
+            return [];
+        }
+        const repoName = window.githubManager.currentRepo.full_name;
+        return await window.githubManager.fetchPullRequests(repoName);
     }
 
     async loadIssues() {
-        // TODO: Загрузка issues из GitHub API
-        console.log('[GitHubPanel] Loading issues...');
+        if (!window.githubManager || !window.githubManager.currentRepo) {
+            console.warn('[GitHubPanel] GitHubManager not available or no repo selected');
+            return [];
+        }
+        const repoName = window.githubManager.currentRepo.full_name;
+        return await window.githubManager.fetchIssues(repoName);
     }
 
-    async loadCommits() {
-        // TODO: Загрузка коммитов из GitHub API
-        console.log('[GitHubPanel] Loading commits...');
+    async loadCommits(branch = 'main') {
+        if (!window.githubManager || !window.githubManager.currentRepo) {
+            console.warn('[GitHubPanel] GitHubManager not available or no repo selected');
+            return [];
+        }
+        const repoName = window.githubManager.currentRepo.full_name;
+        return await window.githubManager.fetchCommits(repoName, branch);
     }
 
     async loadActions() {
-        // TODO: Загрузка actions из GitHub API
-        console.log('[GitHubPanel] Loading actions...');
+        if (!window.githubManager || !window.githubManager.currentRepo) {
+            console.warn('[GitHubPanel] GitHubManager not available or no repo selected');
+            return [];
+        }
+        const repoName = window.githubManager.currentRepo.full_name;
+        return await window.githubManager.fetchWorkflowRuns(repoName);
     }
 
     async loadReleases() {
-        // TODO: Загрузка релизов из GitHub API
-        console.log('[GitHubPanel] Loading releases...');
+        if (!window.githubManager || !window.githubManager.currentRepo) {
+            console.warn('[GitHubPanel] GitHubManager not available or no repo selected');
+            return [];
+        }
+        const repoName = window.githubManager.currentRepo.full_name;
+        return await window.githubManager.fetchReleases(repoName);
     }
 
     // Создание новых элементов
-    createBranch() {
-        const name = prompt('Введите имя новой ветки:');
-        if (name) {
-            console.log('[GitHubPanel] Creating branch:', name);
-            // TODO: API call
-            alert(`Ветка "${name}" создана`);
+    async createBranch(branchName, baseBranch = 'main') {
+        if (!window.githubManager || !window.githubManager.currentRepo) {
+            throw new Error('GitHubManager not available or no repo selected');
         }
+        const repoName = window.githubManager.currentRepo.full_name;
+        return await window.githubManager.createBranch(repoName, branchName, baseBranch);
     }
 
     createPullRequest() {
-        console.log('[GitHubPanel] Creating new PR...');
-        // TODO: Открыть модальное окно для создания PR
+        // Используется модальное окно из основного UI
+        if (window.showModal) {
+            window.showModal('createPR');
+        } else {
+            console.warn('[GitHubPanel] Modal manager not available');
+        }
     }
 
     createIssue() {
-        console.log('[GitHubPanel] Creating new issue...');
-        // TODO: Открыть модальное окно для создания issue
+        // Используется модальное окно из основного UI
+        if (window.showModal) {
+            window.showModal('createIssue');
+        } else {
+            console.warn('[GitHubPanel] Modal manager not available');
+        }
     }
 
     createRelease() {
-        console.log('[GitHubPanel] Creating new release...');
-        // TODO: Открыть модальное окно для создания релиза
+        // Используется модальное окно из основного UI
+        if (window.showModal) {
+            window.showModal('createRelease');
+        } else {
+            console.warn('[GitHubPanel] Modal manager not available');
+        }
     }
 }
 

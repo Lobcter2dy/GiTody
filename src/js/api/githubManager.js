@@ -992,6 +992,16 @@ export class GitHubManager {
         }
     }
 
+    // === RELEASES ===
+
+    // Получить релизы (с кешем)
+    async fetchReleases(repoName) {
+        try {
+            const response = await this._cachedFetch(`${this.baseUrl}/repos/${repoName}/releases?per_page=20`);
+            return response.ok ? await response.json() : [];
+        } catch { return []; }
+    }
+
     // Отрисовать workflows
     renderWorkflows(workflows) {
         const container = document.getElementById('workflowsList');
