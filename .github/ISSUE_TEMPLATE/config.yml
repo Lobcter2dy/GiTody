@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 GitHub Discussions
+    url: https://github.com/Lobcter2dy/GiTody/discussions
+    about: Задайте вопросы и обсудите идеи с сообществом
+  - name: 📚 Документация
+    url: https://github.com/Lobcter2dy/GiTody#readme
+    about: Прочитайте документацию проекта
+  - name: 🔐 Сообщить об уязвимости
+    url: https://github.com/Lobcter2dy/GiTody/security/advisories/new
+    about: Сообщите об уязвимости безопасности (конфиденциально)
