@@ -34,7 +34,7 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "systeminformation": "5.29.1"
+    "systeminformation": "5.30.3"
   },
   "build": {
     "appId": "com.gitody.app",
